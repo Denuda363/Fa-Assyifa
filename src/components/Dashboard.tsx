@@ -52,7 +52,7 @@ export default function Dashboard({ transactions, profile }: DashboardProps) {
 
     const incomeNeto = incomeBruto - pengeluaranCashTotal - pengeluaranTfTotal;
     const profitPerusahaan = incomeNeto > 0 ? incomeNeto * 0.15 : 0;
-    const profitOwner = incomeNeto > 0 ? incomeNeto - profitPerusahaan : 0;
+    const profitOwner = profitPerusahaan * 0.20;
 
     const summary = {
       incomeBruto,
