@@ -4,17 +4,28 @@ import * as XLSX from 'xlsx';
 import { Transaction, CompanyProfile, formatRupiah } from '../types';
 import { format } from 'date-fns';
 
-interface ExportData {
+export interface BreakdownItem {
+  name: string;
+  amount: number;
+}
+
+export interface DetailedSummary {
+  incomeBruto: number;
+  incomeBreakdown: BreakdownItem[];
+  pengeluaranCashTotal: number;
+  pengeluaranCashBreakdown: BreakdownItem[];
+  pengeluaranTfTotal: number;
+  pengeluaranTfBreakdown: BreakdownItem[];
+  profitPerusahaan: number;
+  profitOwner: number;
+  incomeNeto: number;
+}
+
+export interface ExportData {
   transactions: Transaction[];
   profile: CompanyProfile;
   monthYear: string;
-  summary: {
-    incomeBruto: number;
-    outcomeTotal: number;
-    profitPerusahaan: number;
-    profitOwner: number;
-    incomeNeto: number;
-  };
+  summary: DetailedSummary;
 }
 
 export const exportToPDF = (data: ExportData) => {
@@ -41,15 +52,57 @@ export const exportToPDF = (data: ExportData) => {
 
   // Summary section
   doc.setFontSize(10);
-  doc.setFont('helvetica', 'normal');
   
   let yPos = 54;
-  doc.text(`Income Bruto: ${formatRupiah(summary.incomeBruto)}`, 14, yPos); yPos += 6;
-  doc.text(`Total Pengeluaran: ${formatRupiah(summary.outcomeTotal)}`, 14, yPos); yPos += 6;
-  doc.text(`Profit Perusahaan (15%): ${formatRupiah(summary.profitPerusahaan)}`, 14, yPos); yPos += 6;
-  doc.text(`Profit Owner (20% dari Profit Perusahaan): ${formatRupiah(summary.profitOwner)}`, 14, yPos); yPos += 6;
+  
   doc.setFont('helvetica', 'bold');
-  doc.text(`Income Neto: ${formatRupiah(summary.incomeNeto)}`, 14, yPos); yPos += 10;
+  doc.text(`Income Bruto`, 14, yPos); 
+  doc.text(formatRupiah(summary.incomeBruto), 100, yPos);
+  yPos += 6;
+  
+  doc.setFont('helvetica', 'normal');
+  summary.incomeBreakdown.forEach(item => {
+    doc.text(`- ${item.name}`, 18, yPos);
+    doc.text(formatRupiah(item.amount), 100, yPos);
+    yPos += 6;
+  });
+
+  doc.setFont('helvetica', 'bold');
+  doc.text(`Pengeluaran Cash`, 14, yPos);
+  doc.text(formatRupiah(summary.pengeluaranCashTotal), 100, yPos);
+  yPos += 6;
+
+  doc.setFont('helvetica', 'normal');
+  summary.pengeluaranCashBreakdown.forEach(item => {
+    doc.text(`- ${item.name}`, 18, yPos);
+    doc.text(formatRupiah(item.amount), 100, yPos);
+    yPos += 6;
+  });
+
+  doc.setFont('helvetica', 'bold');
+  doc.text(`Pengeluaran TF`, 14, yPos);
+  doc.text(formatRupiah(summary.pengeluaranTfTotal), 100, yPos);
+  yPos += 6;
+
+  doc.setFont('helvetica', 'normal');
+  summary.pengeluaranTfBreakdown.forEach(item => {
+    doc.text(`- ${item.name}`, 18, yPos);
+    doc.text(formatRupiah(item.amount), 100, yPos);
+    yPos += 6;
+  });
+
+  doc.setFont('helvetica', 'bold');
+  doc.text(`Profit Perusahaan 15%`, 14, yPos);
+  doc.text(formatRupiah(summary.profitPerusahaan), 100, yPos);
+  yPos += 6;
+
+  doc.text(`Profit Owner`, 14, yPos);
+  doc.text(formatRupiah(summary.profitOwner), 100, yPos);
+  yPos += 6;
+
+  doc.text(`Income Neto`, 14, yPos);
+  doc.text(formatRupiah(summary.incomeNeto), 100, yPos);
+  yPos += 10;
 
   // Transactions Table
   const tableData = transactions.map((t, index) => [
@@ -81,7 +134,7 @@ export const exportToExcel = (data: ExportData) => {
   const wb = XLSX.utils.book_new();
 
   // Create summary sheet
-  const summaryData = [
+  const summaryData: any[][] = [
     [profile.name],
     [profile.address],
     [`WhatsApp: ${profile.whatsapp}`],
@@ -89,12 +142,26 @@ export const exportToExcel = (data: ExportData) => {
     [`Laporan Keuangan - ${monthYear}`],
     [],
     ['Ringkasan', 'Nilai'],
-    ['Income Bruto', formatRupiah(summary.incomeBruto)],
-    ['Total Pengeluaran', formatRupiah(summary.outcomeTotal)],
-    ['Profit Perusahaan (15%)', formatRupiah(summary.profitPerusahaan)],
-    ['Profit Owner (20% dari Profit)', formatRupiah(summary.profitOwner)],
-    ['Income Neto', formatRupiah(summary.incomeNeto)],
+    ['Income Bruto', formatRupiah(summary.incomeBruto)]
   ];
+
+  summary.incomeBreakdown.forEach(item => {
+    summaryData.push([` - ${item.name}`, formatRupiah(item.amount)]);
+  });
+
+  summaryData.push(['Pengeluaran Cash', formatRupiah(summary.pengeluaranCashTotal)]);
+  summary.pengeluaranCashBreakdown.forEach(item => {
+    summaryData.push([` - ${item.name}`, formatRupiah(item.amount)]);
+  });
+
+  summaryData.push(['Pengeluaran TF', formatRupiah(summary.pengeluaranTfTotal)]);
+  summary.pengeluaranTfBreakdown.forEach(item => {
+    summaryData.push([` - ${item.name}`, formatRupiah(item.amount)]);
+  });
+
+  summaryData.push(['Profit Perusahaan 15%', formatRupiah(summary.profitPerusahaan)]);
+  summaryData.push(['Profit Owner', formatRupiah(summary.profitOwner)]);
+  summaryData.push(['Income Neto', formatRupiah(summary.incomeNeto)]);
 
   const wsSummary = XLSX.utils.aoa_to_sheet(summaryData);
   XLSX.utils.book_append_sheet(wb, wsSummary, 'Ringkasan');
