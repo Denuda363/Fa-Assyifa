@@ -1,0 +1,6 @@
+{
+  "name": "ProfitFlow Finance Manager",
+  "description": "Aplikasi untuk mengelola keuangan income dan outcome perusahaan dengan report export excel dan pdf.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
