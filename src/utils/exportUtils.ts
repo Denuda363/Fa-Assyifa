@@ -1,6 +1,6 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import * as XLSX from 'xlsx';
+import * as XLSX from 'xlsx-js-style';
 import { Transaction, CompanyProfile, formatRupiah } from '../types';
 import { format } from 'date-fns';
 
@@ -164,28 +164,99 @@ export const exportToExcel = (data: ExportData) => {
   summaryData.push(['Income Neto', formatRupiah(summary.incomeNeto)]);
 
   const wsSummary = XLSX.utils.aoa_to_sheet(summaryData);
+  
+  // Style summary sheet slightly
+  for (const cell in wsSummary) {
+    if (cell[0] === '!') continue;
+    const val = wsSummary[cell].v;
+    if (!wsSummary[cell].s) wsSummary[cell].s = {};
+    if (val === 'Ringkasan' || val === 'Nilai') {
+      wsSummary[cell].s.font = { bold: true };
+    }
+    if (val === profile.name) {
+      wsSummary[cell].s.font = { bold: true, sz: 14 };
+    }
+    if (val === `Laporan Keuangan - ${monthYear}`) {
+      wsSummary[cell].s.font = { bold: true, sz: 12 };
+    }
+  }
+  wsSummary['!cols'] = [{ wch: 30 }, { wch: 25 }];
   XLSX.utils.book_append_sheet(wb, wsSummary, 'Ringkasan');
 
   // Create transactions sheet
   const txHeader = ['No', 'Tanggal', 'Tipe', 'Kategori', 'Metode', 'Pemasukan', 'Pengeluaran', 'Keterangan'];
-  const txData = transactions.map((t, index) => [
-    index + 1,
-    format(new Date(t.date), 'dd/MM/yyyy'),
-    t.type === 'income' ? 'Pemasukan' : 'Pengeluaran',
-    t.category,
-    t.method.toUpperCase(),
-    t.type === 'income' ? formatRupiah(t.amount) : '-',
-    t.type === 'outcome' ? formatRupiah(t.amount) : '-',
-    t.notes || '-'
+  let totalPemasukan = 0;
+  let totalPengeluaran = 0;
+  
+  const txData = transactions.map((t, index) => {
+    if (t.type === 'income') totalPemasukan += t.amount;
+    if (t.type === 'outcome') totalPengeluaran += t.amount;
+    return [
+      index + 1,
+      format(new Date(t.date), 'dd/MM/yyyy'),
+      t.type === 'income' ? 'Pemasukan' : 'Pengeluaran',
+      t.category,
+      t.method.toUpperCase(),
+      t.type === 'income' ? formatRupiah(t.amount) : '-',
+      t.type === 'outcome' ? formatRupiah(t.amount) : '-',
+      t.notes || '-'
+    ];
+  });
+
+  // Add total row
+  txData.push([
+    '', '', '', '', 'TOTAL',
+    formatRupiah(totalPemasukan),
+    formatRupiah(totalPengeluaran),
+    ''
   ]);
 
   const wsTx = XLSX.utils.aoa_to_sheet([txHeader, ...txData]);
   
-  // Auto-size columns (rough approximation)
-  const cols = txHeader.map(h => ({ wch: Math.max(h.length, 12) }));
-  wsTx['!cols'] = cols;
+  // Auto-size columns based on content
+  const maxColsLength = txHeader.map(h => h.length);
+  txData.forEach(row => {
+    row.forEach((cell, i) => {
+      const valStr = cell ? cell.toString() : '';
+      if (valStr.length > maxColsLength[i]) {
+        maxColsLength[i] = valStr.length;
+      }
+    });
+  });
+  wsTx['!cols'] = maxColsLength.map(w => ({ wch: w + 2 }));
+
+  // Style the transactions sheet (borders, bold header, bold totals)
+  const borderAll = {
+    top: { style: 'thin' },
+    bottom: { style: 'thin' },
+    left: { style: 'thin' },
+    right: { style: 'thin' }
+  };
+
+  for (const cell in wsTx) {
+    if (cell[0] === '!') continue;
+    const rowNumber = parseInt(cell.match(/[0-9]+/)?.[0] || "0");
+    
+    if (!wsTx[cell].s) wsTx[cell].s = {};
+    wsTx[cell].s.border = borderAll;
+    
+    // Format Header
+    if (rowNumber === 1) {
+      wsTx[cell].s.font = { bold: true, color: { rgb: "FFFFFF" } };
+      wsTx[cell].s.fill = { fgColor: { rgb: "2980B9" } };
+      wsTx[cell].s.alignment = { horizontal: 'center' };
+    }
+    
+    // Format Totals Row (Last Row)
+    if (rowNumber === txData.length + 1) { // +1 for header
+      wsTx[cell].s.font = { bold: true };
+      if (wsTx[cell].v === 'TOTAL') {
+        wsTx[cell].s.alignment = { horizontal: 'right' };
+      }
+    }
+  }
 
   XLSX.utils.book_append_sheet(wb, wsTx, 'Transaksi');
 
-  XLSX.writeFile(wb, `Laporan_Keuangan_${profile.name.replace(/\\s+/g, '_')}_${monthYear}.xlsx`);
+  XLSX.writeFile(wb, `Laporan_Keuangan_${profile.name.replace(/\s+/g, '_')}_${monthYear}.xlsx`);
 };
