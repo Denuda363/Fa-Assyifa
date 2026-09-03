@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Transaction, INCOME_CATEGORIES, OUTCOME_CASH_CATEGORIES, OUTCOME_TF_CATEGORIES, formatRupiah } from '../types';
-import { Edit2, Trash2, Plus, X } from 'lucide-react';
-import { format } from 'date-fns';
+import { Edit2, Trash2, Plus, X, Filter } from 'lucide-react';
+import { format, isWithinInterval, startOfDay, endOfDay, parseISO } from 'date-fns';
 
 interface TransactionsProps {
   transactions: Transaction[];
@@ -21,6 +21,27 @@ export default function Transactions({ transactions, onAdd, onUpdate, onDelete }
     date: new Date().toISOString().split('T')[0],
     notes: ''
   });
+
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+
+  const filteredTransactions = useMemo(() => {
+    return transactions.filter((tx) => {
+      if (!startDate && !endDate) return true;
+      const txDate = parseISO(tx.date);
+      const start = startDate ? startOfDay(parseISO(startDate)) : null;
+      const end = endDate ? endOfDay(parseISO(endDate)) : null;
+      
+      if (start && end) {
+        return isWithinInterval(txDate, { start, end });
+      } else if (start) {
+        return txDate >= start;
+      } else if (end) {
+        return txDate <= end;
+      }
+      return true;
+    });
+  }, [transactions, startDate, endDate]);
 
   const handleOpenModal = (tx?: Transaction) => {
     if (tx) {
@@ -76,24 +97,53 @@ export default function Transactions({ transactions, onAdd, onUpdate, onDelete }
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <h2 className="text-2xl font-bold text-white">Riwayat Transaksi</h2>
-        <button
-          onClick={() => handleOpenModal()}
-          className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-emerald-600 hover:bg-emerald-500 transition-colors"
-        >
-          <Plus className="mr-2 h-4 w-4" /> Tambah Transaksi
-        </button>
+        <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+          <div className="flex items-center gap-2 bg-[#11141b] border border-slate-800 rounded-md p-1.5 flex-1 sm:flex-none min-w-[200px]">
+            <Filter className="h-4 w-4 text-slate-500 ml-2" />
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              className="bg-transparent border-none text-slate-300 text-sm focus:ring-0 w-full sm:w-auto px-2"
+              title="Dari Tanggal"
+            />
+            <span className="text-slate-500">-</span>
+            <input
+              type="date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              className="bg-transparent border-none text-slate-300 text-sm focus:ring-0 w-full sm:w-auto px-2"
+              title="Sampai Tanggal"
+            />
+            {(startDate || endDate) && (
+              <button 
+                onClick={() => { setStartDate(''); setEndDate(''); }}
+                className="text-slate-400 hover:text-rose-400 mr-2 transition-colors"
+                title="Hapus Filter"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+          <button
+            onClick={() => handleOpenModal()}
+            className="inline-flex items-center justify-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-emerald-600 hover:bg-emerald-500 transition-colors w-full sm:w-auto"
+          >
+            <Plus className="mr-2 h-4 w-4" /> Tambah Transaksi
+          </button>
+        </div>
       </div>
 
       <div className="bg-[#11141b] border border-slate-800 sm:rounded-xl">
         {/* Mobile View (Cards) */}
         <div className="block md:hidden">
-          {transactions.length === 0 ? (
+          {filteredTransactions.length === 0 ? (
             <div className="p-6 text-center text-sm text-slate-400">
               Belum ada transaksi.
             </div>
           ) : (
             <div className="divide-y divide-slate-800">
-              {transactions.map((tx) => (
+              {filteredTransactions.map((tx) => (
                 <div key={tx.id} className="p-4 hover:bg-slate-800/50 transition-colors">
                   <div className="flex justify-between items-start mb-2">
                     <div>
@@ -151,14 +201,14 @@ export default function Transactions({ transactions, onAdd, onUpdate, onDelete }
               </tr>
             </thead>
             <tbody className="bg-transparent divide-y divide-slate-800">
-              {transactions.length === 0 ? (
+              {filteredTransactions.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="px-6 py-10 text-center text-sm text-slate-400">
                     Belum ada transaksi.
                   </td>
                 </tr>
               ) : (
-                transactions.map((tx) => (
+                filteredTransactions.map((tx) => (
                   <tr key={tx.id} className="hover:bg-slate-800/50 transition-colors">
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-400">
                       {format(new Date(tx.date), 'dd MMM yyyy')}

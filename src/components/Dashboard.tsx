@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react';
 import { Transaction, CompanyProfile, formatRupiah } from '../types';
-import { ArrowDownRight, ArrowUpRight, Wallet, Building, User, Download } from 'lucide-react';
+import { ArrowDownRight, ArrowUpRight, Wallet, Building, User, Download, Calendar, Filter } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { exportToPDF, exportToExcel } from '../utils/exportUtils';
-import { format } from 'date-fns';
+import { format, isWithinInterval, startOfDay, endOfDay, parseISO, eachDayOfInterval } from 'date-fns';
 
 interface DashboardProps {
   transactions: Transaction[];
@@ -11,25 +11,70 @@ interface DashboardProps {
 }
 
 export default function Dashboard({ transactions, profile }: DashboardProps) {
+  const [filterMode, setFilterMode] = useState<'month' | 'custom'>('month');
   const [selectedMonth, setSelectedMonth] = useState(() => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
   });
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
 
   const { filteredTxs, summary, chartData } = useMemo(() => {
-    const [year, month] = selectedMonth.split('-');
     
-    const filtered = transactions.filter(t => {
-      const d = new Date(t.date);
-      return d.getFullYear() === parseInt(year) && d.getMonth() + 1 === parseInt(month);
-    });
+    let filtered = transactions;
+    let dailyData: any[] = [];
+    let year = '', month = '';
+
+    if (filterMode === 'month') {
+      [year, month] = selectedMonth.split('-');
+      filtered = transactions.filter(t => {
+        const d = new Date(t.date);
+        return d.getFullYear() === parseInt(year) && d.getMonth() + 1 === parseInt(month);
+      });
+
+      const daysInMonth = new Date(parseInt(year), parseInt(month), 0).getDate();
+      dailyData = Array.from({ length: daysInMonth }, (_, i) => ({
+        name: `${i + 1}`,
+        dateStr: `${year}-${month}-${String(i + 1).padStart(2, '0')}`,
+        Pemasukan: 0,
+        Pengeluaran: 0
+      }));
+    } else {
+      filtered = transactions.filter((tx) => {
+        if (!startDate && !endDate) return true;
+        const txDate = parseISO(tx.date);
+        const start = startDate ? startOfDay(parseISO(startDate)) : null;
+        const end = endDate ? endOfDay(parseISO(endDate)) : null;
+        
+        if (start && end) {
+          return isWithinInterval(txDate, { start, end });
+        } else if (start) {
+          return txDate >= start;
+        } else if (end) {
+          return txDate <= end;
+        }
+        return true;
+      });
+
+      if (startDate && endDate) {
+        try {
+          const days = eachDayOfInterval({ start: parseISO(startDate), end: parseISO(endDate) });
+          dailyData = days.map(d => ({
+            name: format(d, 'dd MMM'),
+            dateStr: format(d, 'yyyy-MM-dd'),
+            Pemasukan: 0,
+            Pengeluaran: 0
+          }));
+        } catch (e) {
+          dailyData = [];
+        }
+      }
+    }
 
     let incomeBruto = 0;
-    
     const incomeMap = new Map<string, number>();
     const outcomeCashMap = new Map<string, number>();
     const outcomeTfMap = new Map<string, number>();
-
     let pengeluaranCashTotal = 0;
     let pengeluaranTfTotal = 0;
 
@@ -46,6 +91,22 @@ export default function Dashboard({ transactions, profile }: DashboardProps) {
         } else {
           pengeluaranTfTotal += t.amount;
           outcomeTfMap.set(t.category, (outcomeTfMap.get(t.category) || 0) + t.amount);
+        }
+      }
+
+      // Add to chart data
+      if (dailyData.length > 0) {
+        if (filterMode === 'month') {
+          const d = new Date(t.date);
+          const dayIdx = d.getDate() - 1;
+          if (t.type === 'income') dailyData[dayIdx].Pemasukan += t.amount;
+          if (t.type === 'outcome') dailyData[dayIdx].Pengeluaran += t.amount;
+        } else {
+          const matchingDay = dailyData.find(d => d.dateStr === t.date);
+          if (matchingDay) {
+            if (t.type === 'income') matchingDay.Pemasukan += t.amount;
+            if (t.type === 'outcome') matchingDay.Pengeluaran += t.amount;
+          }
         }
       }
     });
@@ -66,49 +127,68 @@ export default function Dashboard({ transactions, profile }: DashboardProps) {
       incomeNeto
     };
 
-    // Daily chart data
-    const daysInMonth = new Date(parseInt(year), parseInt(month), 0).getDate();
-    const dailyData = Array.from({ length: daysInMonth }, (_, i) => ({
-      name: `${i + 1}`,
-      Pemasukan: 0,
-      Pengeluaran: 0
-    }));
-
-    filtered.forEach(t => {
-      const d = new Date(t.date);
-      const dayIdx = d.getDate() - 1;
-      if (t.type === 'income') dailyData[dayIdx].Pemasukan += t.amount;
-      if (t.type === 'outcome') dailyData[dayIdx].Pengeluaran += t.amount;
-    });
-
     return { 
       filteredTxs: filtered,
       summary,
       chartData: dailyData
     };
-  }, [transactions, selectedMonth]);
+  }, [transactions, selectedMonth, filterMode, startDate, endDate]);
 
-  const monthYearLabel = format(new Date(`${selectedMonth}-01`), 'MMMM yyyy');
+  const reportLabel = filterMode === 'month' 
+    ? format(new Date(`${selectedMonth}-01`), 'MMMM yyyy')
+    : `${startDate || 'Awal'} s.d ${endDate || 'Akhir'}`;
 
   const handleExportPDF = () => {
-    exportToPDF({ transactions: filteredTxs, profile, monthYear: monthYearLabel, summary });
+    exportToPDF({ transactions: filteredTxs, profile, monthYear: reportLabel, summary });
   };
 
   const handleExportExcel = () => {
-    exportToExcel({ transactions: filteredTxs, profile, monthYear: monthYearLabel, summary });
+    exportToExcel({ transactions: filteredTxs, profile, monthYear: reportLabel, summary });
   };
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+      <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
         <h2 className="text-2xl font-bold text-white">Dashboard</h2>
-        <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
-          <input
-            type="month"
-            value={selectedMonth}
-            onChange={(e) => setSelectedMonth(e.target.value)}
-            className="bg-slate-800 border-slate-700 text-white rounded-md shadow-sm focus:ring-emerald-500 focus:border-emerald-500 text-sm py-2 px-3 border flex-1 min-w-[150px]"
-          />
+        <div className="flex flex-wrap items-center gap-3 w-full xl:w-auto">
+          
+          {/* Filter Mode Selector */}
+          <select 
+            value={filterMode}
+            onChange={(e) => setFilterMode(e.target.value as 'month' | 'custom')}
+            className="bg-slate-800 border-slate-700 text-white rounded-md shadow-sm focus:ring-emerald-500 focus:border-emerald-500 text-sm py-2 px-3 border"
+          >
+            <option value="month">Per Bulan</option>
+            <option value="custom">Rentang Tanggal</option>
+          </select>
+
+          {filterMode === 'month' ? (
+            <input
+              type="month"
+              value={selectedMonth}
+              onChange={(e) => setSelectedMonth(e.target.value)}
+              className="bg-slate-800 border-slate-700 text-white rounded-md shadow-sm focus:ring-emerald-500 focus:border-emerald-500 text-sm py-2 px-3 border flex-1 min-w-[150px]"
+            />
+          ) : (
+            <div className="flex items-center gap-2 bg-[#11141b] border border-slate-700 rounded-md p-1.5 flex-1 min-w-[200px]">
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="bg-transparent border-none text-slate-300 text-sm focus:ring-0 w-full px-2"
+                title="Dari Tanggal"
+              />
+              <span className="text-slate-500">-</span>
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="bg-transparent border-none text-slate-300 text-sm focus:ring-0 w-full px-2"
+                title="Sampai Tanggal"
+              />
+            </div>
+          )}
+
           <div className="flex gap-2 flex-1 min-w-[200px]">
             <button
               onClick={handleExportPDF}
@@ -206,7 +286,7 @@ export default function Dashboard({ transactions, profile }: DashboardProps) {
         {/* Right column: Chart */}
         <div className="lg:col-span-2">
           <div className="bg-[#11141b] border border-slate-800 rounded-xl p-6 h-full shadow-sm">
-            <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-6">Arus Kas Harian - {monthYearLabel}</h3>
+            <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-6">Arus Kas Harian - {reportLabel}</h3>
             <div className="h-[450px]">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
