@@ -57,8 +57,9 @@ export default function AppSettings({ transactions }: AppSettingsProps) {
         data.forEach((tx) => {
           // generate a new id or use existing
           const newDocRef = doc(collection(db, 'transactions'));
-          const { id, ...txData } = tx; // remove id to prevent collision, firestore will generate new one
-          batch.set(newDocRef, { ...txData, timestamp: txData.timestamp || Date.now() });
+          const txData = { ...tx };
+          delete txData.id; // remove id to prevent collision, firestore will generate new one
+          batch.set(newDocRef, txData);
           count++;
         });
 
@@ -77,33 +78,34 @@ export default function AppSettings({ transactions }: AppSettingsProps) {
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
-      <div className="bg-[#11141b] border border-slate-800 shadow px-4 py-5 sm:rounded-xl sm:p-6">
-        <div className="md:grid md:grid-cols-3 md:gap-6">
+      <div className="bg-neutral-900/40 backdrop-blur-2xl border border-neutral-800/60 shadow-2xl px-4 py-8 sm:rounded-[2rem] sm:p-10 relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/5 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none"></div>
+        <div className="md:grid md:grid-cols-3 md:gap-8 relative z-10">
           <div className="md:col-span-1">
-            <h3 className="text-lg font-medium leading-6 text-white">Backup & Restore</h3>
-            <p className="mt-1 text-sm text-slate-400">
+            <h3 className="text-xl font-bold leading-6 text-white tracking-tight">Backup & Restore</h3>
+            <p className="mt-2 text-sm text-neutral-400 leading-relaxed">
               Amankan data transaksi Anda dengan mengunduh file cadangan. Anda juga dapat memulihkan data dari file cadangan.
             </p>
           </div>
-          <div className="mt-5 md:mt-0 md:col-span-2 space-y-4">
+          <div className="mt-5 md:mt-0 md:col-span-2 space-y-6">
             
-            <div className="bg-amber-500/10 border-l-4 border-amber-500 p-4 mb-4">
+            <div className="bg-amber-500/10 border-l-4 border-amber-500 p-5 rounded-r-xl">
               <div className="flex">
                 <div className="flex-shrink-0">
                   <AlertTriangle className="h-5 w-5 text-amber-400" />
                 </div>
                 <div className="ml-3">
-                  <p className="text-sm text-amber-400/90">
+                  <p className="text-sm text-amber-400/90 leading-relaxed">
                     Hati-hati saat melakukan restore data, karena akan menambahkan transaksi dari file ke database Anda.
                   </p>
                 </div>
               </div>
             </div>
 
-            <div className="flex flex-col sm:flex-row gap-4">
+            <div className="flex flex-col sm:flex-row gap-4 pt-2">
               <button
                 onClick={handleBackup}
-                className="inline-flex justify-center items-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-emerald-600 hover:bg-emerald-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 transition-colors"
+                className="inline-flex justify-center items-center py-3 px-6 border border-transparent shadow-lg shadow-indigo-500/20 text-sm font-bold rounded-2xl text-white bg-indigo-600 hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 focus:ring-offset-neutral-900 transition-all"
               >
                 <Download className="mr-2 h-4 w-4" /> Backup Data
               </button>
@@ -111,7 +113,7 @@ export default function AppSettings({ transactions }: AppSettingsProps) {
               <button
                 onClick={handleRestoreClick}
                 disabled={isRestoring}
-                className="inline-flex justify-center items-center py-2 px-4 border border-slate-700 shadow-sm text-sm font-medium rounded-md text-slate-200 bg-slate-800 hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 disabled:opacity-50 transition-colors"
+                className="inline-flex justify-center items-center py-3 px-6 border border-neutral-800/60 shadow-sm text-sm font-semibold rounded-2xl text-neutral-300 bg-neutral-900/60 hover:bg-neutral-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 transition-all hover:border-indigo-500/30"
               >
                 <Upload className="mr-2 h-4 w-4" /> {isRestoring ? 'Memulihkan...' : 'Restore Data'}
               </button>
@@ -125,7 +127,7 @@ export default function AppSettings({ transactions }: AppSettingsProps) {
             </div>
 
             {message && (
-              <p className={`text-sm font-medium mt-2 ${message.includes('Gagal') ? 'text-rose-500' : 'text-emerald-400'}`}>
+              <p className={`text-sm font-medium mt-4 p-3 rounded-xl ${message.includes('Gagal') ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20' : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'}`}>
                 {message}
               </p>
             )}
