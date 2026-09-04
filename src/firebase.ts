@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getFirestore } from 'firebase/firestore';
+import { getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore';
 import config from '../firebase-applet-config.json';
 
 const firebaseConfig = {
@@ -12,5 +12,7 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
-// Provide databaseId if using a named database
-export const db = getFirestore(app, config.firestoreDatabaseId);
+// Initialize Firestore with offline persistence
+export const db = initializeFirestore(app, {
+  localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
+}, config.firestoreDatabaseId);

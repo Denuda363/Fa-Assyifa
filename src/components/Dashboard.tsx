@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { exportToPDF, exportToExcel } from '../utils/exportUtils';
-import { format, isWithinInterval, startOfDay, endOfDay, parseISO, eachDayOfInterval, subMonths, subDays } from 'date-fns';
+import { format, isWithinInterval, startOfDay, endOfDay, parseISO, eachDayOfInterval, subMonths, subDays, differenceInDays, isValid } from 'date-fns';
 
 interface DashboardProps {
   transactions: Transaction[];
@@ -106,14 +106,20 @@ export default function Dashboard({ transactions, profile }: DashboardProps) {
         try {
           const start = parseISO(startDate);
           const end = parseISO(endDate);
-          if (start <= end) {
-            const days = eachDayOfInterval({ start, end });
-            dailyData = days.map(d => ({
-              name: format(d, 'dd MMM'),
-              dateStr: format(d, 'yyyy-MM-dd'),
-              Pemasukan: 0,
-              Pengeluaran: 0
-            }));
+          
+          if (isValid(start) && isValid(end) && start <= end) {
+            const diff = differenceInDays(end, start);
+            if (diff <= 100) {
+              const days = eachDayOfInterval({ start, end });
+              dailyData = days.map(d => ({
+                name: format(d, 'dd MMM'),
+                dateStr: format(d, 'yyyy-MM-dd'),
+                Pemasukan: 0,
+                Pengeluaran: 0
+              }));
+            } else {
+              dailyData = [];
+            }
           } else {
             dailyData = [];
           }
