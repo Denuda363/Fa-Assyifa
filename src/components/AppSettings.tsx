@@ -57,9 +57,8 @@ export default function AppSettings({ transactions }: AppSettingsProps) {
         data.forEach((tx) => {
           // generate a new id or use existing
           const newDocRef = doc(collection(db, 'transactions'));
-          const txData = { ...tx };
-          delete txData.id; // remove id to prevent collision, firestore will generate new one
-          batch.set(newDocRef, txData);
+          const { id, ...txData } = tx; // remove id to prevent collision, firestore will generate new one
+          batch.set(newDocRef, { ...txData, timestamp: txData.timestamp || Date.now() });
           count++;
         });
 
