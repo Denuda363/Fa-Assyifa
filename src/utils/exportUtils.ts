@@ -133,57 +133,64 @@ export const exportToExcel = (data: ExportData) => {
 
   const wb = XLSX.utils.book_new();
 
-  // Create summary sheet
-  const summaryData: any[][] = [
-    [profile.name],
-    [profile.address],
-    [`WhatsApp: ${profile.whatsapp}`],
-    [],
-    [`Laporan Keuangan - ${monthYear}`],
-    [],
-    ['Ringkasan', 'Nilai'],
-    ['Income Bruto', formatRupiah(summary.incomeBruto)]
-  ];
+  // Helper for generating summary data
+  const createSummarySheetData = (p: CompanyProfile, title: string, s: DetailedSummary) => {
+    const summaryData: any[][] = [
+      [p.name],
+      [p.address],
+      [`WhatsApp: ${p.whatsapp}`],
+      [],
+      [title],
+      [],
+      ['Ringkasan', 'Nilai'],
+      ['Income Bruto', formatRupiah(s.incomeBruto)]
+    ];
 
-  summary.incomeBreakdown.forEach(item => {
-    summaryData.push([` - ${item.name}`, formatRupiah(item.amount)]);
-  });
+    s.incomeBreakdown.forEach(item => {
+      summaryData.push([` - ${item.name}`, formatRupiah(item.amount)]);
+    });
 
-  summaryData.push(['Pengeluaran Cash', formatRupiah(summary.pengeluaranCashTotal)]);
-  summary.pengeluaranCashBreakdown.forEach(item => {
-    summaryData.push([` - ${item.name}`, formatRupiah(item.amount)]);
-  });
+    summaryData.push(['Pengeluaran Cash', formatRupiah(s.pengeluaranCashTotal)]);
+    s.pengeluaranCashBreakdown.forEach(item => {
+      summaryData.push([` - ${item.name}`, formatRupiah(item.amount)]);
+    });
 
-  summaryData.push(['Pengeluaran TF', formatRupiah(summary.pengeluaranTfTotal)]);
-  summary.pengeluaranTfBreakdown.forEach(item => {
-    summaryData.push([` - ${item.name}`, formatRupiah(item.amount)]);
-  });
+    summaryData.push(['Pengeluaran TF', formatRupiah(s.pengeluaranTfTotal)]);
+    s.pengeluaranTfBreakdown.forEach(item => {
+      summaryData.push([` - ${item.name}`, formatRupiah(item.amount)]);
+    });
 
-  summaryData.push(['Profit Perusahaan 15%', formatRupiah(summary.profitPerusahaan)]);
-  summaryData.push(['Profit Owner', formatRupiah(summary.profitOwner)]);
-  summaryData.push(['Income Neto', formatRupiah(summary.incomeNeto)]);
+    summaryData.push(['Profit Perusahaan 15%', formatRupiah(s.profitPerusahaan)]);
+    summaryData.push(['Profit Owner', formatRupiah(s.profitOwner)]);
+    summaryData.push(['Income Neto', formatRupiah(s.incomeNeto)]);
+    return summaryData;
+  };
 
-  const wsSummary = XLSX.utils.aoa_to_sheet(summaryData);
-  
-  // Style summary sheet slightly
-  for (const cell in wsSummary) {
-    if (cell[0] === '!') continue;
-    const val = wsSummary[cell].v;
-    if (!wsSummary[cell].s) wsSummary[cell].s = {};
-    if (val === 'Ringkasan' || val === 'Nilai') {
-      wsSummary[cell].s.font = { bold: true };
+  const styleSummarySheet = (ws: XLSX.WorkSheet, p: CompanyProfile, title: string) => {
+    for (const cell in ws) {
+      if (cell[0] === '!') continue;
+      const val = ws[cell].v;
+      if (!ws[cell].s) ws[cell].s = {};
+      if (val === 'Ringkasan' || val === 'Nilai') {
+        ws[cell].s.font = { bold: true };
+      }
+      if (val === p.name) {
+        ws[cell].s.font = { bold: true, sz: 14 };
+      }
+      if (val === title) {
+        ws[cell].s.font = { bold: true, sz: 12 };
+      }
     }
-    if (val === profile.name) {
-      wsSummary[cell].s.font = { bold: true, sz: 14 };
-    }
-    if (val === `Laporan Keuangan - ${monthYear}`) {
-      wsSummary[cell].s.font = { bold: true, sz: 12 };
-    }
-  }
-  wsSummary['!cols'] = [{ wch: 30 }, { wch: 25 }];
+    ws['!cols'] = [{ wch: 30 }, { wch: 25 }];
+  };
+
+  // 1. Create main summary sheet
+  const mainTitle = `Laporan Keuangan - ${monthYear}`;
+  const wsSummary = XLSX.utils.aoa_to_sheet(createSummarySheetData(profile, mainTitle, summary));
+  styleSummarySheet(wsSummary, profile, mainTitle);
   XLSX.utils.book_append_sheet(wb, wsSummary, 'Ringkasan');
 
-  // Create transactions sheet
+  // 2. Create transactions sheet
   const txHeader = ['No', 'Tanggal', 'Tipe', 'Kategori', 'Metode', 'Pemasukan', 'Pengeluaran', 'Keterangan'];
   let totalPemasukan = 0;
   let totalPengeluaran = 0;
@@ -257,6 +264,78 @@ export const exportToExcel = (data: ExportData) => {
   }
 
   XLSX.utils.book_append_sheet(wb, wsTx, 'Transaksi');
+
+  // 3. Create per-day summary sheets
+  const calculateDetailedSummary = (txs: Transaction[]): DetailedSummary => {
+    let incomeBruto = 0;
+    const incomeMap = new Map<string, number>();
+    let pengeluaranCashTotal = 0;
+    const pengeluaranCashMap = new Map<string, number>();
+    let pengeluaranTfTotal = 0;
+    const pengeluaranTfMap = new Map<string, number>();
+
+    txs.forEach(t => {
+      if (t.type === 'income') {
+        incomeBruto += t.amount;
+        incomeMap.set(t.category, (incomeMap.get(t.category) || 0) + t.amount);
+      } else {
+        if (t.method === 'cash') {
+          pengeluaranCashTotal += t.amount;
+          pengeluaranCashMap.set(t.category, (pengeluaranCashMap.get(t.category) || 0) + t.amount);
+        } else {
+          pengeluaranTfTotal += t.amount;
+          pengeluaranTfMap.set(t.category, (pengeluaranTfMap.get(t.category) || 0) + t.amount);
+        }
+      }
+    });
+
+    const incomeNeto = incomeBruto - (pengeluaranCashTotal + pengeluaranTfTotal);
+    const profitPerusahaan = incomeNeto * 0.15;
+    const profitOwner = incomeNeto * 0.20;
+
+    return {
+      incomeBruto,
+      incomeBreakdown: Array.from(incomeMap.entries()).map(([name, amount]) => ({ name, amount })),
+      pengeluaranCashTotal,
+      pengeluaranCashBreakdown: Array.from(pengeluaranCashMap.entries()).map(([name, amount]) => ({ name, amount })),
+      pengeluaranTfTotal,
+      pengeluaranTfBreakdown: Array.from(pengeluaranTfMap.entries()).map(([name, amount]) => ({ name, amount })),
+      incomeNeto,
+      profitPerusahaan,
+      profitOwner
+    };
+  };
+
+  const txsByDay = new Map<string, Transaction[]>();
+  transactions.forEach(t => {
+    const dateKey = t.date;
+    if (!txsByDay.has(dateKey)) {
+      txsByDay.set(dateKey, []);
+    }
+    txsByDay.get(dateKey)!.push(t);
+  });
+
+  const sortedDates = Array.from(txsByDay.keys()).sort();
+  const usedSheetNames = new Set<string>(['Ringkasan', 'Transaksi']);
+
+  sortedDates.forEach(dateStr => {
+    const dayTxs = txsByDay.get(dateStr)!;
+    const daySummary = calculateDetailedSummary(dayTxs);
+    const dateObj = new Date(dateStr);
+    
+    let sheetName = format(dateObj, 'd');
+    if (usedSheetNames.has(sheetName)) {
+       sheetName = format(dateObj, 'd-MMM');
+    }
+    usedSheetNames.add(sheetName);
+
+    const title = `Laporan Keuangan - Tanggal ${format(dateObj, 'dd/MM/yyyy')}`;
+    const daySummaryData = createSummarySheetData(profile, title, daySummary);
+    const wsDay = XLSX.utils.aoa_to_sheet(daySummaryData);
+    styleSummarySheet(wsDay, profile, title);
+    
+    XLSX.utils.book_append_sheet(wb, wsDay, sheetName);
+  });
 
   XLSX.writeFile(wb, `Laporan_Keuangan_${profile.name.replace(/\s+/g, '_')}_${monthYear}.xlsx`);
 };
