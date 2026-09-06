@@ -11,6 +11,7 @@ import Transactions from './components/Transactions';
 import Profile from './components/Profile';
 import AppSettings from './components/AppSettings';
 import { useFinanceData } from './hooks/useFinanceData';
+import { PWAInstallButton } from './components/PWAInstallButton';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -105,6 +106,9 @@ export default function App() {
           })}
         </nav>
         <div className="p-6 border-t border-neutral-800/50 mt-auto">
+          <div className="flex justify-center mb-4">
+            <PWAInstallButton />
+          </div>
           <div className="bg-neutral-950/50 rounded-2xl p-4 border border-neutral-800/50 flex flex-col gap-2">
             <div className="flex items-center gap-2 text-neutral-400">
               <Calendar className="w-4 h-4 text-indigo-400" />
@@ -126,9 +130,8 @@ export default function App() {
              <div className="w-9 h-9 bg-indigo-500 rounded-xl flex items-center justify-center text-white font-bold shrink-0 shadow-lg shadow-indigo-500/20">PF</div>
              <h1 className="text-lg font-bold text-white tracking-tight">ProfitFlow</h1>
            </div>
-           <div className="flex flex-col items-end">
-             <span className="text-xs font-medium text-neutral-400">{dateStr}</span>
-             <span className="text-sm font-bold text-white font-mono">{hours}:{minutes}</span>
+           <div className="flex items-center gap-3">
+             <PWAInstallButton />
            </div>
         </header>
 
