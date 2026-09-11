@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { Transaction, CompanyProfile, DEFAULT_PROFILE } from '../types';
-import { Download, Upload, AlertTriangle, Plus, X, Tag } from 'lucide-react';
+import { Download, Upload, AlertTriangle, Plus, X, Tag, Edit2, Check } from 'lucide-react';
 import { db } from '../firebase';
 import { collection, writeBatch, doc } from 'firebase/firestore';
 
@@ -15,6 +15,8 @@ export default function AppSettings({ transactions, profile, onUpdateProfile, on
   const [isRestoring, setIsRestoring] = useState(false);
   const [message, setMessage] = useState('');
   const [newCategory, setNewCategory] = useState('');
+  const [editingCategory, setEditingCategory] = useState<string | null>(null);
+  const [editCategoryValue, setEditCategoryValue] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const customCategories = profile.customOutcomeCategories || DEFAULT_PROFILE.customOutcomeCategories || [];
@@ -31,6 +33,25 @@ export default function AppSettings({ transactions, profile, onUpdateProfile, on
   const handleRemoveCategory = async (catToRemove: string) => {
     const updatedCategories = customCategories.filter(c => c !== catToRemove);
     await onUpdateProfile({ customOutcomeCategories: updatedCategories });
+  };
+
+  const handleSaveEditCategory = async (oldCat: string) => {
+    if (!editCategoryValue.trim() || editCategoryValue.trim() === oldCat) {
+      setEditingCategory(null);
+      return;
+    }
+    
+    // Check if new name already exists
+    if (customCategories.includes(editCategoryValue.trim())) {
+      setEditingCategory(null);
+      return;
+    }
+
+    const updatedCategories = customCategories.map(c => 
+      c === oldCat ? editCategoryValue.trim() : c
+    );
+    await onUpdateProfile({ customOutcomeCategories: updatedCategories });
+    setEditingCategory(null);
   };
 
   const handleBackup = () => {
@@ -195,13 +216,58 @@ export default function AppSettings({ transactions, profile, onUpdateProfile, on
             <div className="flex flex-wrap gap-2">
               {customCategories.map((cat, idx) => (
                 <div key={idx} className="inline-flex items-center px-3 py-1.5 rounded-lg text-sm font-medium bg-neutral-800/80 border border-neutral-700 text-neutral-200">
-                  {cat}
-                  <button
-                    onClick={() => handleRemoveCategory(cat)}
-                    className="ml-2 inline-flex items-center p-0.5 rounded-full text-neutral-400 hover:text-rose-400 hover:bg-rose-400/10 transition-colors focus:outline-none"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
+                  {editingCategory === cat ? (
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={editCategoryValue}
+                        onChange={(e) => setEditCategoryValue(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') handleSaveEditCategory(cat);
+                          if (e.key === 'Escape') setEditingCategory(null);
+                        }}
+                        className="bg-neutral-900 border border-indigo-500/50 rounded-md px-2 py-0.5 text-white text-sm outline-none w-24 focus:ring-1 focus:ring-indigo-500"
+                        autoFocus
+                      />
+                      <button
+                        onClick={() => handleSaveEditCategory(cat)}
+                        className="p-1 rounded text-emerald-400 hover:bg-emerald-400/10 transition-colors"
+                        title="Simpan"
+                      >
+                        <Check className="h-3 w-3" />
+                      </button>
+                      <button
+                        onClick={() => setEditingCategory(null)}
+                        className="p-1 rounded text-neutral-400 hover:bg-neutral-700 transition-colors"
+                        title="Batal"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <span>{cat}</span>
+                      <div className="flex items-center ml-2 border-l border-neutral-700 pl-1">
+                        <button
+                          onClick={() => {
+                            setEditingCategory(cat);
+                            setEditCategoryValue(cat);
+                          }}
+                          className="inline-flex items-center p-0.5 mx-0.5 rounded text-neutral-400 hover:text-indigo-400 hover:bg-indigo-400/10 transition-colors focus:outline-none"
+                          title="Edit"
+                        >
+                          <Edit2 className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          onClick={() => handleRemoveCategory(cat)}
+                          className="inline-flex items-center p-0.5 mx-0.5 rounded text-neutral-400 hover:text-rose-400 hover:bg-rose-400/10 transition-colors focus:outline-none"
+                          title="Hapus"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </>
+                  )}
                 </div>
               ))}
               {customCategories.length === 0 && (
