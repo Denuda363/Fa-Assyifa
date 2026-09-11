@@ -38,6 +38,7 @@ export default function App() {
       case 'transactions':
         return <Transactions 
           transactions={transactions} 
+          profile={profile}
           onAdd={addTransaction} 
           onUpdate={updateTransaction} 
           onDelete={deleteTransaction} 
@@ -45,7 +46,7 @@ export default function App() {
       case 'profile':
         return <Profile profile={profile} onUpdate={updateProfile} />;
       case 'settings':
-        return <AppSettings transactions={transactions} onRestore={async () => {}} />;
+        return <AppSettings transactions={transactions} profile={profile} onUpdateProfile={updateProfile} onRestore={async () => {}} />;
       default:
         return <Dashboard transactions={transactions} profile={profile} />;
     }

@@ -1,16 +1,17 @@
 import React, { useState, useMemo } from 'react';
-import { Transaction, INCOME_CATEGORIES, OUTCOME_CASH_CATEGORIES, OUTCOME_TF_CATEGORIES, formatRupiah } from '../types';
+import { Transaction, CompanyProfile, DEFAULT_PROFILE, INCOME_CATEGORIES, OUTCOME_CASH_CATEGORIES, OUTCOME_TF_CATEGORIES, formatRupiah } from '../types';
 import { Edit2, Trash2, Plus, X, Filter } from 'lucide-react';
 import { format, isWithinInterval, startOfDay, endOfDay, parseISO } from 'date-fns';
 
 interface TransactionsProps {
   transactions: Transaction[];
+  profile: CompanyProfile;
   onAdd: (tx: Omit<Transaction, 'id' | 'timestamp'>) => Promise<void>;
   onUpdate: (id: string, tx: Partial<Transaction>) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
 }
 
-export default function Transactions({ transactions, onAdd, onUpdate, onDelete }: TransactionsProps) {
+export default function Transactions({ transactions, profile, onAdd, onUpdate, onDelete }: TransactionsProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formData, setFormData] = useState<Omit<Transaction, 'id' | 'timestamp'>>({
@@ -89,9 +90,12 @@ export default function Transactions({ transactions, onAdd, onUpdate, onDelete }
     }
   };
 
+  const customCategories = profile.customOutcomeCategories || DEFAULT_PROFILE.customOutcomeCategories || [];
+  const combinedCashCategories = Array.from(new Set([...OUTCOME_CASH_CATEGORIES, ...customCategories]));
+
   const availableCategories = formData.type === 'income' 
     ? INCOME_CATEGORIES 
-    : (formData.method === 'tf' ? OUTCOME_TF_CATEGORIES.map(c => ({label: c, method: 'tf'})) : OUTCOME_CASH_CATEGORIES.map(c => ({label: c, method: 'cash'})));
+    : (formData.method === 'tf' ? OUTCOME_TF_CATEGORIES.map(c => ({label: c, method: 'tf'})) : combinedCashCategories.map(c => ({label: c, method: 'cash'})));
 
   return (
     <div className="space-y-6">
@@ -298,7 +302,7 @@ export default function Transactions({ transactions, onAdd, onUpdate, onDelete }
                         ...formData, 
                         type: 'outcome', 
                         method: 'cash',
-                        category: OUTCOME_CASH_CATEGORIES[0]
+                        category: combinedCashCategories[0]
                       });
                     }}
                     className={`py-3 text-sm font-semibold rounded-xl transition-all ${
@@ -342,7 +346,7 @@ export default function Transactions({ transactions, onAdd, onUpdate, onDelete }
                         const method = e.target.value as any;
                         let category = formData.category;
                         if (formData.type === 'outcome') {
-                          category = method === 'tf' ? OUTCOME_TF_CATEGORIES[0] : OUTCOME_CASH_CATEGORIES[0];
+                          category = method === 'tf' ? OUTCOME_TF_CATEGORIES[0] : combinedCashCategories[0];
                         } else {
                           category = INCOME_CATEGORIES.find(c => c.method === method)?.label || 'Cash';
                         }

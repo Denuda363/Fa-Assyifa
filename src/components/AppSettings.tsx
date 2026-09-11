@@ -1,18 +1,37 @@
 import React, { useState, useRef } from 'react';
-import { Transaction } from '../types';
-import { Download, Upload, AlertTriangle } from 'lucide-react';
+import { Transaction, CompanyProfile, DEFAULT_PROFILE } from '../types';
+import { Download, Upload, AlertTriangle, Plus, X, Tag } from 'lucide-react';
 import { db } from '../firebase';
 import { collection, writeBatch, doc } from 'firebase/firestore';
 
 interface AppSettingsProps {
   transactions: Transaction[];
+  profile: CompanyProfile;
+  onUpdateProfile: (data: Partial<CompanyProfile>) => Promise<void>;
   onRestore: () => Promise<void>;
 }
 
-export default function AppSettings({ transactions }: AppSettingsProps) {
+export default function AppSettings({ transactions, profile, onUpdateProfile, onRestore }: AppSettingsProps) {
   const [isRestoring, setIsRestoring] = useState(false);
   const [message, setMessage] = useState('');
+  const [newCategory, setNewCategory] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const customCategories = profile.customOutcomeCategories || DEFAULT_PROFILE.customOutcomeCategories || [];
+
+  const handleAddCategory = async () => {
+    if (!newCategory.trim()) return;
+    if (customCategories.includes(newCategory.trim())) return;
+
+    const updatedCategories = [...customCategories, newCategory.trim()];
+    await onUpdateProfile({ customOutcomeCategories: updatedCategories });
+    setNewCategory('');
+  };
+
+  const handleRemoveCategory = async (catToRemove: string) => {
+    const updatedCategories = customCategories.filter(c => c !== catToRemove);
+    await onUpdateProfile({ customOutcomeCategories: updatedCategories });
+  };
 
   const handleBackup = () => {
     const dataStr = JSON.stringify(transactions, null, 2);
@@ -131,6 +150,64 @@ export default function AppSettings({ transactions }: AppSettingsProps) {
                 {message}
               </p>
             )}
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-neutral-900/40 backdrop-blur-2xl border border-neutral-800/60 shadow-2xl px-4 py-8 sm:rounded-[2rem] sm:p-10 relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-32 h-32 bg-sky-500/5 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none"></div>
+        <div className="md:grid md:grid-cols-3 md:gap-8 relative z-10">
+          <div className="md:col-span-1">
+            <h3 className="text-xl font-bold leading-6 text-white tracking-tight">Kategori Pengeluaran</h3>
+            <p className="mt-2 text-sm text-neutral-400 leading-relaxed">
+              Kelola rincian pengeluaran tambahan (seperti air, sampah, keamanan, dll) sesuai kebutuhan Anda.
+            </p>
+          </div>
+          <div className="mt-5 md:mt-0 md:col-span-2 space-y-6">
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <Tag className="h-5 w-5 text-neutral-500" />
+                </div>
+                <input
+                  type="text"
+                  value={newCategory}
+                  onChange={(e) => setNewCategory(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleAddCategory();
+                    }
+                  }}
+                  className="block w-full pl-10 bg-neutral-900/50 border border-neutral-800 rounded-xl text-white py-3 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all placeholder-neutral-500"
+                  placeholder="Kategori baru..."
+                />
+              </div>
+              <button
+                onClick={handleAddCategory}
+                disabled={!newCategory.trim()}
+                className="inline-flex items-center justify-center px-4 py-3 border border-transparent text-sm font-bold rounded-xl shadow-lg shadow-indigo-500/20 text-white bg-indigo-600 hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+              >
+                <Plus className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              {customCategories.map((cat, idx) => (
+                <div key={idx} className="inline-flex items-center px-3 py-1.5 rounded-lg text-sm font-medium bg-neutral-800/80 border border-neutral-700 text-neutral-200">
+                  {cat}
+                  <button
+                    onClick={() => handleRemoveCategory(cat)}
+                    className="ml-2 inline-flex items-center p-0.5 rounded-full text-neutral-400 hover:text-rose-400 hover:bg-rose-400/10 transition-colors focus:outline-none"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              ))}
+              {customCategories.length === 0 && (
+                <span className="text-sm text-neutral-500 italic">Belum ada kategori kustom.</span>
+              )}
+            </div>
           </div>
         </div>
       </div>

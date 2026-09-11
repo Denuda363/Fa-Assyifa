@@ -13,12 +13,14 @@ export interface CompanyProfile {
   name: string;
   address: string;
   whatsapp: string;
+  customOutcomeCategories?: string[];
 }
 
 export const DEFAULT_PROFILE: CompanyProfile = {
   name: "Apotek Assyifa Farma Cideres",
   address: "Jl. Raya Cideres-Kadipaten No. 45, Cideres, Majalengka",
-  whatsapp: ""
+  whatsapp: "",
+  customOutcomeCategories: ['Air', 'Sampah', 'Keamanan', 'Pajak', 'Mes Perum']
 };
 
 export const INCOME_CATEGORIES = [
@@ -32,7 +34,6 @@ export const OUTCOME_CASH_CATEGORIES = [
   'Wifi',
   'Token',
   'Bensin Pengiriman',
-  'Pajak',
   'Bayar Distributor',
   'Gajih Karyawan',
   'Permintaan Owner',
