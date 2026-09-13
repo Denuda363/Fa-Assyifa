@@ -143,26 +143,26 @@ export const exportToExcel = (data: ExportData) => {
       [title],
       [],
       ['Ringkasan', 'Nilai'],
-      ['Income Bruto', formatRupiah(s.incomeBruto)]
+      ['Income Bruto', s.incomeBruto]
     ];
 
     s.incomeBreakdown.forEach(item => {
-      summaryData.push([` - ${item.name}`, formatRupiah(item.amount)]);
+      summaryData.push([` - ${item.name}`, item.amount]);
     });
 
-    summaryData.push(['Pengeluaran Cash', formatRupiah(s.pengeluaranCashTotal)]);
+    summaryData.push(['Pengeluaran Cash', s.pengeluaranCashTotal]);
     s.pengeluaranCashBreakdown.forEach(item => {
-      summaryData.push([` - ${item.name}`, formatRupiah(item.amount)]);
+      summaryData.push([` - ${item.name}`, item.amount]);
     });
 
-    summaryData.push(['Pengeluaran TF', formatRupiah(s.pengeluaranTfTotal)]);
+    summaryData.push(['Pengeluaran TF', s.pengeluaranTfTotal]);
     s.pengeluaranTfBreakdown.forEach(item => {
-      summaryData.push([` - ${item.name}`, formatRupiah(item.amount)]);
+      summaryData.push([` - ${item.name}`, item.amount]);
     });
 
-    summaryData.push(['Profit Perusahaan 15%', formatRupiah(s.profitPerusahaan)]);
-    summaryData.push(['Profit Owner', formatRupiah(s.profitOwner)]);
-    summaryData.push(['Income Neto', formatRupiah(s.incomeNeto)]);
+    summaryData.push(['Profit Perusahaan 15%', s.profitPerusahaan]);
+    summaryData.push(['Profit Owner', s.profitOwner]);
+    summaryData.push(['Income Neto', s.incomeNeto]);
     return summaryData;
   };
 
@@ -180,6 +180,9 @@ export const exportToExcel = (data: ExportData) => {
       if (val === title) {
         ws[cell].s.font = { bold: true, sz: 12 };
       }
+      if (typeof val === 'number') {
+        ws[cell].z = '_("Rp"* #,##0_);_("Rp"* \\(#,##0\\);_("Rp"* "-"_);_(@_)';
+      }
     }
     ws['!cols'] = [{ wch: 30 }, { wch: 25 }];
   };
@@ -192,29 +195,26 @@ export const exportToExcel = (data: ExportData) => {
 
   // 2. Create transactions sheet
   const txHeader = ['No', 'Tanggal', 'Tipe', 'Kategori', 'Metode', 'Pemasukan', 'Pengeluaran', 'Keterangan'];
-  let totalPemasukan = 0;
-  let totalPengeluaran = 0;
   
-  const txData = transactions.map((t, index) => {
-    if (t.type === 'income') totalPemasukan += t.amount;
-    if (t.type === 'outcome') totalPengeluaran += t.amount;
+  const txData: any[][] = transactions.map((t, index) => {
     return [
       index + 1,
       format(new Date(t.date), 'dd/MM/yyyy'),
       t.type === 'income' ? 'Pemasukan' : 'Pengeluaran',
       t.category,
       t.method.toUpperCase(),
-      t.type === 'income' ? formatRupiah(t.amount) : '-',
-      t.type === 'outcome' ? formatRupiah(t.amount) : '-',
+      t.type === 'income' ? t.amount : 0,
+      t.type === 'outcome' ? t.amount : 0,
       t.notes || '-'
     ];
   });
 
-  // Add total row
+  // Add total row using SUBTOTAL formula (109 = sum ignoring hidden rows)
+  const lastDataRow = transactions.length + 1; // Row 1 is header, data is 2 to length+1
   txData.push([
     '', '', '', '', 'TOTAL',
-    formatRupiah(totalPemasukan),
-    formatRupiah(totalPengeluaran),
+    { t: 'n', f: `SUBTOTAL(109,F2:F${lastDataRow})` },
+    { t: 'n', f: `SUBTOTAL(109,G2:G${lastDataRow})` },
     ''
   ]);
 
@@ -224,7 +224,16 @@ export const exportToExcel = (data: ExportData) => {
   const maxColsLength = txHeader.map(h => h.length);
   txData.forEach(row => {
     row.forEach((cell, i) => {
-      const valStr = cell ? cell.toString() : '';
+      let valStr = '';
+      if (cell !== null && cell !== undefined) {
+        if (typeof cell === 'object' && cell.f) {
+          valStr = 'Rp 99.999.999'; // Dummy string for width
+        } else if (typeof cell === 'number') {
+          valStr = formatRupiah(cell); // Format just to measure width
+        } else {
+          valStr = cell.toString();
+        }
+      }
       if (valStr.length > maxColsLength[i]) {
         maxColsLength[i] = valStr.length;
       }
@@ -232,7 +241,7 @@ export const exportToExcel = (data: ExportData) => {
   });
   wsTx['!cols'] = maxColsLength.map(w => ({ wch: w + 2 }));
 
-  // Style the transactions sheet (borders, bold header, bold totals)
+  // Style the transactions sheet (borders, bold header, bold totals, number format)
   const borderAll = {
     top: { style: 'thin' },
     bottom: { style: 'thin' },
@@ -243,6 +252,7 @@ export const exportToExcel = (data: ExportData) => {
   for (const cell in wsTx) {
     if (cell[0] === '!') continue;
     const rowNumber = parseInt(cell.match(/[0-9]+/)?.[0] || "0");
+    const colStr = cell.replace(/[0-9]/g, '');
     
     if (!wsTx[cell].s) wsTx[cell].s = {};
     wsTx[cell].s.border = borderAll;
@@ -254,6 +264,11 @@ export const exportToExcel = (data: ExportData) => {
       wsTx[cell].s.alignment = { horizontal: 'center' };
     }
     
+    // Format numeric columns with accounting format
+    if ((colStr === 'F' || colStr === 'G') && rowNumber > 1) {
+      wsTx[cell].z = '_("Rp"* #,##0_);_("Rp"* \\(#,##0\\);_("Rp"* "-"_);_(@_)';
+    }
+
     // Format Totals Row (Last Row)
     if (rowNumber === txData.length + 1) { // +1 for header
       wsTx[cell].s.font = { bold: true };
@@ -262,6 +277,9 @@ export const exportToExcel = (data: ExportData) => {
       }
     }
   }
+
+  // Enable AutoFilter for the table (excluding the TOTAL row)
+  wsTx['!autofilter'] = { ref: `A1:H${lastDataRow}` };
 
   XLSX.utils.book_append_sheet(wb, wsTx, 'Transaksi');
 
