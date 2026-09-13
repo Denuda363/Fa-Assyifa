@@ -17,9 +17,20 @@ export default function AppSettings({ transactions, profile, onUpdateProfile, on
   const [newCategory, setNewCategory] = useState('');
   const [editingCategory, setEditingCategory] = useState<string | null>(null);
   const [editCategoryValue, setEditCategoryValue] = useState('');
+  
+  const [newIncomeCategory, setNewIncomeCategory] = useState('');
+  const [editingIncomeCategory, setEditingIncomeCategory] = useState<string | null>(null);
+  const [editIncomeCategoryValue, setEditIncomeCategoryValue] = useState('');
+
+  const [newTfCategory, setNewTfCategory] = useState('');
+  const [editingTfCategory, setEditingTfCategory] = useState<string | null>(null);
+  const [editTfCategoryValue, setEditTfCategoryValue] = useState('');
+
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const customCategories = profile.customOutcomeCategories || DEFAULT_PROFILE.customOutcomeCategories || [];
+  const customIncomeCategories = profile.customIncomeCategories || DEFAULT_PROFILE.customIncomeCategories || [];
+  const customOutcomeTfCategories = profile.customOutcomeTfCategories || DEFAULT_PROFILE.customOutcomeTfCategories || [];
 
   const handleAddCategory = async () => {
     if (!newCategory.trim()) return;
@@ -41,7 +52,6 @@ export default function AppSettings({ transactions, profile, onUpdateProfile, on
       return;
     }
     
-    // Check if new name already exists
     if (customCategories.includes(editCategoryValue.trim())) {
       setEditingCategory(null);
       return;
@@ -52,6 +62,70 @@ export default function AppSettings({ transactions, profile, onUpdateProfile, on
     );
     await onUpdateProfile({ customOutcomeCategories: updatedCategories });
     setEditingCategory(null);
+  };
+
+  const handleAddIncomeCategory = async () => {
+    if (!newIncomeCategory.trim()) return;
+    if (customIncomeCategories.includes(newIncomeCategory.trim())) return;
+
+    const updatedCategories = [...customIncomeCategories, newIncomeCategory.trim()];
+    await onUpdateProfile({ customIncomeCategories: updatedCategories });
+    setNewIncomeCategory('');
+  };
+
+  const handleRemoveIncomeCategory = async (catToRemove: string) => {
+    const updatedCategories = customIncomeCategories.filter(c => c !== catToRemove);
+    await onUpdateProfile({ customIncomeCategories: updatedCategories });
+  };
+
+  const handleSaveEditIncomeCategory = async (oldCat: string) => {
+    if (!editIncomeCategoryValue.trim() || editIncomeCategoryValue.trim() === oldCat) {
+      setEditingIncomeCategory(null);
+      return;
+    }
+    
+    if (customIncomeCategories.includes(editIncomeCategoryValue.trim())) {
+      setEditingIncomeCategory(null);
+      return;
+    }
+
+    const updatedCategories = customIncomeCategories.map(c => 
+      c === oldCat ? editIncomeCategoryValue.trim() : c
+    );
+    await onUpdateProfile({ customIncomeCategories: updatedCategories });
+    setEditingIncomeCategory(null);
+  };
+
+  const handleAddTfCategory = async () => {
+    if (!newTfCategory.trim()) return;
+    if (customOutcomeTfCategories.includes(newTfCategory.trim())) return;
+
+    const updatedCategories = [...customOutcomeTfCategories, newTfCategory.trim()];
+    await onUpdateProfile({ customOutcomeTfCategories: updatedCategories });
+    setNewTfCategory('');
+  };
+
+  const handleRemoveTfCategory = async (catToRemove: string) => {
+    const updatedCategories = customOutcomeTfCategories.filter(c => c !== catToRemove);
+    await onUpdateProfile({ customOutcomeTfCategories: updatedCategories });
+  };
+
+  const handleSaveEditTfCategory = async (oldCat: string) => {
+    if (!editTfCategoryValue.trim() || editTfCategoryValue.trim() === oldCat) {
+      setEditingTfCategory(null);
+      return;
+    }
+    
+    if (customOutcomeTfCategories.includes(editTfCategoryValue.trim())) {
+      setEditingTfCategory(null);
+      return;
+    }
+
+    const updatedCategories = customOutcomeTfCategories.map(c => 
+      c === oldCat ? editTfCategoryValue.trim() : c
+    );
+    await onUpdateProfile({ customOutcomeTfCategories: updatedCategories });
+    setEditingTfCategory(null);
   };
 
   const handleBackup = () => {
@@ -179,9 +253,9 @@ export default function AppSettings({ transactions, profile, onUpdateProfile, on
         <div className="absolute top-0 right-0 w-32 h-32 bg-sky-500/5 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none"></div>
         <div className="md:grid md:grid-cols-3 md:gap-8 relative z-10">
           <div className="md:col-span-1">
-            <h3 className="text-xl font-bold leading-6 text-white tracking-tight">Kategori Pengeluaran</h3>
+            <h3 className="text-xl font-bold leading-6 text-white tracking-tight">Kategori Pengeluaran (Tunai)</h3>
             <p className="mt-2 text-sm text-neutral-400 leading-relaxed">
-              Kelola rincian pengeluaran tambahan (seperti air, sampah, keamanan, dll) sesuai kebutuhan Anda.
+              Kelola rincian pengeluaran tambahan (seperti air, sampah, keamanan, dll) untuk metode tunai.
             </p>
           </div>
           <div className="mt-5 md:mt-0 md:col-span-2 space-y-6">
@@ -201,7 +275,7 @@ export default function AppSettings({ transactions, profile, onUpdateProfile, on
                     }
                   }}
                   className="block w-full pl-10 bg-neutral-900/50 border border-neutral-800 rounded-xl text-white py-3 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all placeholder-neutral-500"
-                  placeholder="Kategori baru..."
+                  placeholder="Kategori tunai baru..."
                 />
               </div>
               <button
@@ -271,6 +345,213 @@ export default function AppSettings({ transactions, profile, onUpdateProfile, on
                 </div>
               ))}
               {customCategories.length === 0 && (
+                <span className="text-sm text-neutral-500 italic">Belum ada kategori tunai kustom.</span>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-neutral-900/40 backdrop-blur-2xl border border-neutral-800/60 shadow-2xl px-4 py-8 sm:rounded-[2rem] sm:p-10 relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/5 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none"></div>
+        <div className="md:grid md:grid-cols-3 md:gap-8 relative z-10">
+          <div className="md:col-span-1">
+            <h3 className="text-xl font-bold leading-6 text-white tracking-tight">Kategori Pengeluaran (Transfer)</h3>
+            <p className="mt-2 text-sm text-neutral-400 leading-relaxed">
+              Kelola rincian pengeluaran tambahan khusus untuk metode transfer.
+            </p>
+          </div>
+          <div className="mt-5 md:mt-0 md:col-span-2 space-y-6">
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <Tag className="h-5 w-5 text-neutral-500" />
+                </div>
+                <input
+                  type="text"
+                  value={newTfCategory}
+                  onChange={(e) => setNewTfCategory(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleAddTfCategory();
+                    }
+                  }}
+                  className="block w-full pl-10 bg-neutral-900/50 border border-neutral-800 rounded-xl text-white py-3 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all placeholder-neutral-500"
+                  placeholder="Kategori transfer baru..."
+                />
+              </div>
+              <button
+                onClick={handleAddTfCategory}
+                disabled={!newTfCategory.trim()}
+                className="inline-flex items-center justify-center px-4 py-3 border border-transparent text-sm font-bold rounded-xl shadow-lg shadow-indigo-500/20 text-white bg-indigo-600 hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+              >
+                <Plus className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              {customOutcomeTfCategories.map((cat, idx) => (
+                <div key={idx} className="inline-flex items-center px-3 py-1.5 rounded-lg text-sm font-medium bg-neutral-800/80 border border-neutral-700 text-neutral-200">
+                  {editingTfCategory === cat ? (
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={editTfCategoryValue}
+                        onChange={(e) => setEditTfCategoryValue(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') handleSaveEditTfCategory(cat);
+                          if (e.key === 'Escape') setEditingTfCategory(null);
+                        }}
+                        className="bg-neutral-900 border border-indigo-500/50 rounded-md px-2 py-0.5 text-white text-sm outline-none w-24 focus:ring-1 focus:ring-indigo-500"
+                        autoFocus
+                      />
+                      <button
+                        onClick={() => handleSaveEditTfCategory(cat)}
+                        className="p-1 rounded text-emerald-400 hover:bg-emerald-400/10 transition-colors"
+                        title="Simpan"
+                      >
+                        <Check className="h-3 w-3" />
+                      </button>
+                      <button
+                        onClick={() => setEditingTfCategory(null)}
+                        className="p-1 rounded text-neutral-400 hover:bg-neutral-700 transition-colors"
+                        title="Batal"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <span>{cat}</span>
+                      <div className="flex items-center ml-2 border-l border-neutral-700 pl-1">
+                        <button
+                          onClick={() => {
+                            setEditingTfCategory(cat);
+                            setEditTfCategoryValue(cat);
+                          }}
+                          className="inline-flex items-center p-0.5 mx-0.5 rounded text-neutral-400 hover:text-indigo-400 hover:bg-indigo-400/10 transition-colors focus:outline-none"
+                          title="Edit"
+                        >
+                          <Edit2 className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          onClick={() => handleRemoveTfCategory(cat)}
+                          className="inline-flex items-center p-0.5 mx-0.5 rounded text-neutral-400 hover:text-rose-400 hover:bg-rose-400/10 transition-colors focus:outline-none"
+                          title="Hapus"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              ))}
+              {customOutcomeTfCategories.length === 0 && (
+                <span className="text-sm text-neutral-500 italic">Belum ada kategori transfer kustom.</span>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Income Categories */}
+      <div className="bg-neutral-900/40 backdrop-blur-2xl border border-neutral-800/60 shadow-2xl px-4 py-8 sm:rounded-[2rem] sm:p-10 relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none"></div>
+        <div className="md:grid md:grid-cols-3 md:gap-8 relative z-10">
+          <div className="md:col-span-1">
+            <h3 className="text-xl font-bold leading-6 text-white tracking-tight">Kategori Pemasukan</h3>
+            <p className="mt-2 text-sm text-neutral-400 leading-relaxed">
+              Kelola kategori pemasukan tambahan sesuai kebutuhan (misalnya: Penjualan, QRIS, dll).
+            </p>
+          </div>
+          <div className="mt-5 md:mt-0 md:col-span-2 space-y-6">
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <Tag className="h-5 w-5 text-neutral-500" />
+                </div>
+                <input
+                  type="text"
+                  value={newIncomeCategory}
+                  onChange={(e) => setNewIncomeCategory(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleAddIncomeCategory();
+                    }
+                  }}
+                  className="block w-full pl-10 bg-neutral-900/50 border border-neutral-800 rounded-xl text-white py-3 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all placeholder-neutral-500"
+                  placeholder="Kategori baru..."
+                />
+              </div>
+              <button
+                onClick={handleAddIncomeCategory}
+                disabled={!newIncomeCategory.trim()}
+                className="inline-flex items-center justify-center px-4 py-3 border border-transparent text-sm font-bold rounded-xl shadow-lg shadow-indigo-500/20 text-white bg-indigo-600 hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+              >
+                <Plus className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              {customIncomeCategories.map((cat, idx) => (
+                <div key={idx} className="inline-flex items-center px-3 py-1.5 rounded-lg text-sm font-medium bg-neutral-800/80 border border-neutral-700 text-neutral-200">
+                  {editingIncomeCategory === cat ? (
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={editIncomeCategoryValue}
+                        onChange={(e) => setEditIncomeCategoryValue(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') handleSaveEditIncomeCategory(cat);
+                          if (e.key === 'Escape') setEditingIncomeCategory(null);
+                        }}
+                        className="bg-neutral-900 border border-indigo-500/50 rounded-md px-2 py-0.5 text-white text-sm outline-none w-24 focus:ring-1 focus:ring-indigo-500"
+                        autoFocus
+                      />
+                      <button
+                        onClick={() => handleSaveEditIncomeCategory(cat)}
+                        className="p-1 rounded text-emerald-400 hover:bg-emerald-400/10 transition-colors"
+                        title="Simpan"
+                      >
+                        <Check className="h-3 w-3" />
+                      </button>
+                      <button
+                        onClick={() => setEditingIncomeCategory(null)}
+                        className="p-1 rounded text-neutral-400 hover:bg-neutral-700 transition-colors"
+                        title="Batal"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <span>{cat}</span>
+                      <div className="flex items-center ml-2 border-l border-neutral-700 pl-1">
+                        <button
+                          onClick={() => {
+                            setEditingIncomeCategory(cat);
+                            setEditIncomeCategoryValue(cat);
+                          }}
+                          className="inline-flex items-center p-0.5 mx-0.5 rounded text-neutral-400 hover:text-indigo-400 hover:bg-indigo-400/10 transition-colors focus:outline-none"
+                          title="Edit"
+                        >
+                          <Edit2 className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          onClick={() => handleRemoveIncomeCategory(cat)}
+                          className="inline-flex items-center p-0.5 mx-0.5 rounded text-neutral-400 hover:text-rose-400 hover:bg-rose-400/10 transition-colors focus:outline-none"
+                          title="Hapus"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              ))}
+              {customIncomeCategories.length === 0 && (
                 <span className="text-sm text-neutral-500 italic">Belum ada kategori kustom.</span>
               )}
             </div>

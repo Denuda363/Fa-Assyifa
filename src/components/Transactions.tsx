@@ -93,9 +93,18 @@ export default function Transactions({ transactions, profile, onAdd, onUpdate, o
   const customCategories = profile.customOutcomeCategories || DEFAULT_PROFILE.customOutcomeCategories || [];
   const combinedCashCategories = Array.from(new Set([...OUTCOME_CASH_CATEGORIES, ...customCategories]));
 
+  const customTfCategories = profile.customOutcomeTfCategories || DEFAULT_PROFILE.customOutcomeTfCategories || [];
+  const combinedTfCategories = Array.from(new Set([...OUTCOME_TF_CATEGORIES, ...customTfCategories]));
+
+  const customIncomeCategories = profile.customIncomeCategories || DEFAULT_PROFILE.customIncomeCategories || [];
+  const combinedIncomeCategories = [
+    ...INCOME_CATEGORIES,
+    ...customIncomeCategories.map(c => ({ label: c, method: c.toLowerCase().replace(/\s+/g, '_') }))
+  ];
+
   const availableCategories = formData.type === 'income' 
-    ? INCOME_CATEGORIES 
-    : (formData.method === 'tf' ? OUTCOME_TF_CATEGORIES.map(c => ({label: c, method: 'tf'})) : combinedCashCategories.map(c => ({label: c, method: 'cash'})));
+    ? combinedIncomeCategories 
+    : (formData.method === 'tf' ? combinedTfCategories.map(c => ({label: c, method: 'tf'})) : combinedCashCategories.map(c => ({label: c, method: 'cash'})));
 
   return (
     <div className="space-y-6">
@@ -346,9 +355,9 @@ export default function Transactions({ transactions, profile, onAdd, onUpdate, o
                         const method = e.target.value as any;
                         let category = formData.category;
                         if (formData.type === 'outcome') {
-                          category = method === 'tf' ? OUTCOME_TF_CATEGORIES[0] : combinedCashCategories[0];
+                          category = method === 'tf' ? combinedTfCategories[0] : combinedCashCategories[0];
                         } else {
-                          category = INCOME_CATEGORIES.find(c => c.method === method)?.label || 'Cash';
+                          category = combinedIncomeCategories.find(c => c.method === method)?.label || 'Cash';
                         }
                         setFormData({ ...formData, method, category });
                       }}
@@ -356,9 +365,9 @@ export default function Transactions({ transactions, profile, onAdd, onUpdate, o
                     >
                       {formData.type === 'income' ? (
                         <>
-                          <option value="cash">Cash / Tunai</option>
-                          <option value="tf_bjb">Transfer BJB</option>
-                          <option value="tf_bri">Transfer BRI</option>
+                          {combinedIncomeCategories.map((c, i) => (
+                            <option key={i} value={c.method}>{c.label}</option>
+                          ))}
                         </>
                       ) : (
                         <>

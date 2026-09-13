@@ -1,7 +1,7 @@
 export interface Transaction {
   id: string;
   type: 'income' | 'outcome';
-  method: 'cash' | 'tf_bjb' | 'tf_bri' | 'tf'; 
+  method: string; 
   category: string;
   amount: number;
   date: string;
@@ -14,13 +14,17 @@ export interface CompanyProfile {
   address: string;
   whatsapp: string;
   customOutcomeCategories?: string[];
+  customIncomeCategories?: string[];
+  customOutcomeTfCategories?: string[];
 }
 
 export const DEFAULT_PROFILE: CompanyProfile = {
   name: "Apotek Assyifa Farma Cideres",
   address: "Jl. Raya Cideres-Kadipaten No. 45, Cideres, Majalengka",
   whatsapp: "",
-  customOutcomeCategories: ['Air', 'Sampah', 'Keamanan', 'Pajak', 'Mes Perum']
+  customOutcomeCategories: ['Air', 'Sampah', 'Keamanan', 'Pajak', 'Mes Perum'],
+  customIncomeCategories: [],
+  customOutcomeTfCategories: []
 };
 
 export const INCOME_CATEGORIES = [
