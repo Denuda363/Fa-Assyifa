@@ -4,19 +4,35 @@
  */
 
 import { useState, useEffect } from 'react';
-import { LayoutDashboard, ReceiptText, Building2, Settings, Clock, Calendar } from 'lucide-react';
+import { LayoutDashboard, ReceiptText, Building2, Settings, Clock, Calendar, HandCoins } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import Dashboard from './components/Dashboard';
 import Transactions from './components/Transactions';
+import Loans from './components/Loans';
 import Profile from './components/Profile';
 import AppSettings from './components/AppSettings';
 import { useFinanceData } from './hooks/useFinanceData';
 import { PWAInstallButton } from './components/PWAInstallButton';
+import { getLoanRemaining } from './types';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [currentTime, setCurrentTime] = useState(new Date());
-  const { transactions, profile, loading, addTransaction, updateTransaction, deleteTransaction, updateProfile } = useFinanceData();
+  const { 
+    transactions, 
+    loans,
+    profile, 
+    loading, 
+    addTransaction, 
+    updateTransaction, 
+    deleteTransaction, 
+    updateProfile,
+    addLoan,
+    updateLoan,
+    deleteLoan,
+    addLoanPayment,
+    deleteLoanPayment
+  } = useFinanceData();
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -34,27 +50,45 @@ export default function App() {
   const renderContent = () => {
     switch (activeTab) {
       case 'dashboard':
-        return <Dashboard transactions={transactions} profile={profile} />;
+        return <Dashboard transactions={transactions} profile={profile} loans={loans} />;
       case 'transactions':
         return <Transactions 
           transactions={transactions} 
           profile={profile}
-          onAdd={addTransaction} 
+          onAdd={async (tx) => { await addTransaction(tx); }} 
           onUpdate={updateTransaction} 
           onDelete={deleteTransaction} 
+        />;
+      case 'loans':
+        return <Loans
+          loans={loans}
+          onAddLoan={addLoan}
+          onUpdateLoan={updateLoan}
+          onDeleteLoan={deleteLoan}
+          onAddPayment={addLoanPayment}
+          onDeletePayment={deleteLoanPayment}
         />;
       case 'profile':
         return <Profile profile={profile} onUpdate={updateProfile} />;
       case 'settings':
         return <AppSettings transactions={transactions} profile={profile} onUpdateProfile={updateProfile} onRestore={async () => {}} />;
       default:
-        return <Dashboard transactions={transactions} profile={profile} />;
+        return <Dashboard transactions={transactions} profile={profile} loans={loans} />;
     }
   };
+
+  const activeUnpaidCount = loans.filter(l => getLoanRemaining(l) > 0).length;
 
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', shortLabel: 'Home', icon: LayoutDashboard },
     { id: 'transactions', label: 'Transaksi', shortLabel: 'Data', icon: ReceiptText },
+    { 
+      id: 'loans', 
+      label: 'Pinjaman', 
+      shortLabel: 'Pinjaman', 
+      icon: HandCoins,
+      badge: activeUnpaidCount > 0 ? activeUnpaidCount : undefined 
+    },
     { id: 'profile', label: 'Profil Perusahaan', shortLabel: 'Profil', icon: Building2 },
     { id: 'settings', label: 'Pengaturan', shortLabel: 'Config', icon: Settings },
   ];
@@ -102,6 +136,11 @@ export default function App() {
                 )}
                 <Icon className={`mr-4 h-5 w-5 relative z-10 transition-colors ${isActive ? 'text-indigo-400' : 'text-neutral-500 group-hover:text-neutral-400'}`} />
                 <span className="relative z-10">{item.label}</span>
+                {item.badge !== undefined && (
+                  <span className="relative z-10 ml-auto bg-rose-500/20 text-rose-300 text-[10px] font-bold px-2 py-0.5 rounded-full border border-rose-500/30">
+                    {item.badge}
+                  </span>
+                )}
               </button>
             );
           })}
@@ -175,6 +214,11 @@ export default function App() {
                   />
                 )}
                 <Icon className={`relative z-10 h-[22px] w-[22px] mb-1.5 transition-colors duration-300 ${isActive ? 'text-indigo-400' : 'text-neutral-500'}`} />
+                {item.badge !== undefined && (
+                  <span className="absolute top-1.5 right-1/4 w-4 h-4 bg-rose-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center shadow-md z-20">
+                    {item.badge}
+                  </span>
+                )}
                 <span className={`relative z-10 text-[10px] font-semibold transition-colors duration-300 ${isActive ? 'text-indigo-300' : 'text-neutral-500'}`}>
                   {item.shortLabel}
                 </span>

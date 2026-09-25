@@ -1,17 +1,18 @@
 import { useMemo, useState } from 'react';
-import { Transaction, CompanyProfile, formatRupiah } from '../types';
-import { ArrowDownRight, ArrowUpRight, Wallet, Building, User, Download, Calendar, Filter } from 'lucide-react';
+import { Transaction, CompanyProfile, formatRupiah, Loan, getLoanRemaining } from '../types';
+import { ArrowDownRight, ArrowUpRight, Wallet, Building, User, Download, Calendar, Filter, FileSpreadsheet, X, Check, HandCoins } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { exportToPDF, exportToExcel } from '../utils/exportUtils';
+import { exportToPDF, exportToExcel, exportMonthlyReportExcel, exportYearlyReportExcel, MONTH_NAMES_ID } from '../utils/exportUtils';
 import { format, isWithinInterval, startOfDay, endOfDay, parseISO, eachDayOfInterval } from 'date-fns';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 
 interface DashboardProps {
   transactions: Transaction[];
   profile: CompanyProfile;
+  loans?: Loan[];
 }
 
-export default function Dashboard({ transactions, profile }: DashboardProps) {
+export default function Dashboard({ transactions, profile, loans = [] }: DashboardProps) {
   const [filterMode, setFilterMode] = useState<'month' | 'custom'>('month');
   const [selectedMonth, setSelectedMonth] = useState(() => {
     const d = new Date();
@@ -19,6 +20,11 @@ export default function Dashboard({ transactions, profile }: DashboardProps) {
   });
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [showYearModal, setShowYearModal] = useState(false);
+  const [selectedYear, setSelectedYear] = useState(() => {
+    const d = new Date();
+    return d.getFullYear();
+  });
 
   const { filteredTxs, summary, chartData } = useMemo(() => {
     
@@ -139,12 +145,33 @@ export default function Dashboard({ transactions, profile }: DashboardProps) {
     ? format(new Date(`${selectedMonth}-01`), 'MMMM yyyy')
     : `${startDate || 'Awal'} s.d ${endDate || 'Akhir'}`;
 
+  const availableYears = useMemo(() => {
+    const yearsSet = new Set<number>();
+    yearsSet.add(new Date().getFullYear());
+    yearsSet.add(2025);
+    yearsSet.add(2026);
+    transactions.forEach(t => {
+      const y = new Date(t.date).getFullYear();
+      if (!isNaN(y)) yearsSet.add(y);
+    });
+    return Array.from(yearsSet).sort((a, b) => b - a);
+  }, [transactions]);
+
   const handleExportPDF = () => {
     exportToPDF({ transactions: filteredTxs, profile, monthYear: reportLabel, summary });
   };
 
   const handleExportExcel = () => {
-    exportToExcel({ transactions: filteredTxs, profile, monthYear: reportLabel, summary });
+    exportToExcel({ transactions: filteredTxs, profile, monthYear: reportLabel, summary, loans });
+  };
+
+  const handleExportMonthlyReport = () => {
+    exportMonthlyReportExcel({ transactions: filteredTxs, profile, monthYear: reportLabel, summary, loans });
+  };
+
+  const handleExportYearlyReport = (yearToExport: number) => {
+    exportYearlyReportExcel(transactions, profile, yearToExport, loans);
+    setShowYearModal(false);
   };
 
   return (
@@ -206,18 +233,34 @@ export default function Dashboard({ transactions, profile }: DashboardProps) {
             )}
           </div>
 
-          <div className="flex gap-2 w-full xl:w-auto">
+          <div className="flex flex-wrap gap-2 w-full xl:w-auto">
             <button
-              onClick={handleExportPDF}
-              className="flex-1 xl:flex-none inline-flex justify-center items-center px-3 py-1.5 sm:px-5 sm:py-2.5 border border-neutral-800/60 shadow-sm text-xs sm:text-sm font-semibold rounded-xl sm:rounded-2xl text-neutral-200 bg-neutral-900/40 backdrop-blur-md hover:bg-neutral-800/60 transition-all hover:border-indigo-500/30"
+              onClick={handleExportMonthlyReport}
+              className="flex-1 xl:flex-none inline-flex justify-center items-center px-3 py-1.5 sm:px-4 sm:py-2.5 border border-emerald-500/40 shadow-sm text-xs sm:text-sm font-semibold rounded-xl sm:rounded-2xl text-emerald-300 bg-emerald-950/40 backdrop-blur-md hover:bg-emerald-900/50 transition-all hover:border-emerald-400/60"
+              title="Export Report Bulanan ke Excel (Format Resmi Closing & Rekap)"
             >
-              <Download className="mr-1.5 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4 text-indigo-400" /> PDF
+              <FileSpreadsheet className="mr-1.5 sm:mr-2 h-3.5 w-3.5 sm:h-4 sm:w-4 text-emerald-400" /> Report Bulanan
+            </button>
+            <button
+              onClick={() => setShowYearModal(true)}
+              className="flex-1 xl:flex-none inline-flex justify-center items-center px-3 py-1.5 sm:px-4 sm:py-2.5 border border-amber-500/40 shadow-sm text-xs sm:text-sm font-semibold rounded-xl sm:rounded-2xl text-amber-300 bg-amber-950/40 backdrop-blur-md hover:bg-amber-900/50 transition-all hover:border-amber-400/60"
+              title="Export Report Tahunan ke Excel (12 Bulan Closing Monthly)"
+            >
+              <Calendar className="mr-1.5 sm:mr-2 h-3.5 w-3.5 sm:h-4 sm:w-4 text-amber-400" /> Report Tahunan
             </button>
             <button
               onClick={handleExportExcel}
-              className="flex-1 xl:flex-none inline-flex justify-center items-center px-3 py-1.5 sm:px-5 sm:py-2.5 border border-neutral-800/60 shadow-sm text-xs sm:text-sm font-semibold rounded-xl sm:rounded-2xl text-neutral-200 bg-neutral-900/40 backdrop-blur-md hover:bg-neutral-800/60 transition-all hover:border-indigo-500/30"
+              className="flex-1 xl:flex-none inline-flex justify-center items-center px-3 py-1.5 sm:px-4 sm:py-2.5 border border-neutral-800/60 shadow-sm text-xs sm:text-sm font-semibold rounded-xl sm:rounded-2xl text-neutral-200 bg-neutral-900/40 backdrop-blur-md hover:bg-neutral-800/60 transition-all hover:border-indigo-500/30"
+              title="Export Semua Sheet Lengkap ke Excel"
             >
-              <Download className="mr-1.5 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4 text-indigo-400" /> Excel
+              <Download className="mr-1.5 sm:mr-2 h-3.5 w-3.5 sm:h-4 sm:w-4 text-indigo-400" /> Excel
+            </button>
+            <button
+              onClick={handleExportPDF}
+              className="flex-1 xl:flex-none inline-flex justify-center items-center px-3 py-1.5 sm:px-4 sm:py-2.5 border border-neutral-800/60 shadow-sm text-xs sm:text-sm font-semibold rounded-xl sm:rounded-2xl text-neutral-200 bg-neutral-900/40 backdrop-blur-md hover:bg-neutral-800/60 transition-all hover:border-indigo-500/30"
+              title="Export Laporan ke PDF"
+            >
+              <Download className="mr-1.5 sm:mr-2 h-3.5 w-3.5 sm:h-4 sm:w-4 text-indigo-400" /> PDF
             </button>
           </div>
         </div>
@@ -327,7 +370,152 @@ export default function Dashboard({ transactions, profile }: DashboardProps) {
             </div>
           </div>
         </div>
+
+        {/* Loan Summary Section if loans exist */}
+        {loans.length > 0 && (
+          <div className="bg-neutral-900/30 backdrop-blur-xl border border-neutral-800/50 rounded-xl sm:rounded-[2rem] p-4 sm:p-6 shadow-sm sm:shadow-xl">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-neutral-800/40">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 rounded-xl">
+                  <HandCoins className="h-4 w-4 sm:h-5 sm:w-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white">Status Pinjaman & Pelunasan</h3>
+                  <p className="text-xs text-neutral-400">Ringkasan tagihan pinjaman karyawan & owner</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-4 text-xs sm:text-sm font-mono">
+                <div>
+                  <span className="text-neutral-400">Total Sisa Tagihan: </span>
+                  <span className="font-bold text-rose-400">
+                    {formatRupiah(loans.reduce((sum, l) => sum + getLoanRemaining(l), 0))}
+                  </span>
+                </div>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-3">
+              {loans.slice(0, 3).map(loan => {
+                const rem = getLoanRemaining(loan);
+                return (
+                  <div key={loan.id} className="p-3 bg-neutral-950/50 border border-neutral-800/50 rounded-xl flex items-center justify-between text-xs">
+                    <div>
+                      <div className="font-semibold text-neutral-200">{loan.borrowerName} ({loan.type === 'owner' ? 'Owner' : 'Karyawan'})</div>
+                      <div className="text-neutral-500 mt-0.5 font-mono">{formatRupiah(loan.amount)}</div>
+                    </div>
+                    <div className="text-right">
+                      {rem <= 0 ? (
+                        <span className="text-emerald-400 font-bold">Lunas</span>
+                      ) : (
+                        <div>
+                          <span className="text-rose-400 font-bold font-mono">{formatRupiah(rem)}</span>
+                          <div className="text-[10px] text-neutral-500">Sisa</div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
+
+      {/* Annual Report Export Modal */}
+      <AnimatePresence>
+        {showYearModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-neutral-900 border border-neutral-800 rounded-2xl sm:rounded-3xl max-w-lg w-full p-5 sm:p-7 shadow-2xl space-y-5"
+            >
+              <div className="flex items-center justify-between pb-3 border-b border-neutral-800">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-400">
+                    <FileSpreadsheet className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-base sm:text-lg font-bold text-white">Export Report Tahunan</h3>
+                    <p className="text-xs text-neutral-400">Workbook Excel 12 Bulan + Ringkasan Tahunan</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowYearModal(false)}
+                  className="p-1.5 text-neutral-400 hover:text-white rounded-lg hover:bg-neutral-800 transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Year Selector */}
+              <div>
+                <label className="block text-xs font-semibold text-neutral-300 uppercase tracking-wider mb-2">
+                  Pilih Tahun Laporan
+                </label>
+                <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                  {availableYears.map(yr => (
+                    <button
+                      key={yr}
+                      onClick={() => setSelectedYear(yr)}
+                      className={`py-2 px-3 rounded-xl text-xs sm:text-sm font-semibold transition-all border ${
+                        selectedYear === yr
+                          ? 'bg-amber-500/20 border-amber-500/60 text-amber-300 shadow-sm'
+                          : 'bg-neutral-950/60 border-neutral-800 text-neutral-400 hover:text-neutral-200 hover:border-neutral-700'
+                      }`}
+                    >
+                      {yr}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Sheet Structure Preview */}
+              <div className="bg-neutral-950/60 border border-neutral-800/80 rounded-xl p-3.5 space-y-2 text-xs">
+                <div className="flex items-center justify-between font-semibold text-neutral-300">
+                  <span>Daftar Sheets yang Dibuat:</span>
+                  <span className="text-amber-400">13 Sheets (1 Tahun + 12 Bulan)</span>
+                </div>
+                <div className="flex flex-wrap gap-1.5 pt-1">
+                  <span className="px-2 py-1 bg-amber-500/20 border border-amber-500/40 text-amber-300 font-bold rounded-lg">
+                    {selectedYear}
+                  </span>
+                  {MONTH_NAMES_ID.map(mName => (
+                    <span
+                      key={mName}
+                      className="px-2 py-0.5 bg-neutral-900 border border-neutral-800 text-neutral-300 rounded-md"
+                    >
+                      {mName} {String(selectedYear).slice(-2)}
+                    </span>
+                  ))}
+                </div>
+                <p className="text-[11px] text-neutral-400 italic pt-1 border-t border-neutral-800/60">
+                  Format setiap sheet bulanan menggunakan template resmi Closing Monthly dengan baris Saldo Akhir, Income Bruto, Share Profit, Pengeluaran Dinas, Pengeluaran Bulanan, Kebutuhan Owner, Pinjaman Karyawan, dan rumus kalkulasi otomatis.
+                </p>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center justify-end gap-2.5 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowYearModal(false)}
+                  className="px-4 py-2 text-xs sm:text-sm font-medium text-neutral-400 hover:text-white rounded-xl hover:bg-neutral-800/80 transition-colors"
+                >
+                  Batal
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleExportYearlyReport(selectedYear)}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 text-xs sm:text-sm font-semibold text-neutral-950 bg-amber-400 hover:bg-amber-300 rounded-xl transition-all shadow-lg shadow-amber-400/20"
+                >
+                  <Download className="w-4 h-4" />
+                  Download Excel ({selectedYear})
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
