@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   Loan, 
   LoanPayment, 
@@ -155,6 +156,28 @@ export default function Loans({
       return matchesSearch && matchesType && matchesStatus;
     });
   }, [loans, searchTerm, typeFilter, statusFilter]);
+
+  // Existing employee names for quick suggestion chips on mobile
+  const existingEmployeeNames = useMemo(() => {
+    const namesSet = new Set<string>();
+    loans.forEach(l => {
+      if (l.type === 'employee' && l.borrowerName && l.borrowerName.trim()) {
+        namesSet.add(l.borrowerName.trim());
+      }
+    });
+    return Array.from(namesSet);
+  }, [loans]);
+
+  // Lock background body scroll when any modal is open
+  useEffect(() => {
+    if (isLoanModalOpen || isPaymentModalOpen || isHistoryModalOpen) {
+      const originalOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = originalOverflow;
+      };
+    }
+  }, [isLoanModalOpen, isPaymentModalOpen, isHistoryModalOpen]);
 
   // Handle open add/edit loan modal
   const handleOpenLoanModal = (loan?: Loan) => {
@@ -642,443 +665,578 @@ export default function Loans({
       {/* ======================================================== */}
       {/* 1. MODAL TAMBAH / EDIT PINJAMAN                           */}
       {/* ======================================================== */}
-      {isLoanModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm overflow-y-auto">
-          <div className="bg-neutral-900 border border-neutral-800 rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-200">
-            <div className="flex items-center justify-between p-6 border-b border-neutral-800">
+      {isLoanModalOpen && typeof document !== 'undefined' && createPortal(
+        <div 
+          className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200"
+          role="dialog"
+          aria-modal="true"
+        >
+          {/* Backdrop click to close */}
+          <div 
+            className="absolute inset-0 -z-10" 
+            onClick={() => setIsLoanModalOpen(false)} 
+          />
+
+          <div className="relative bg-neutral-900 border-t sm:border border-neutral-800 rounded-t-[2.5rem] sm:rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl flex flex-col max-h-[92vh] sm:max-h-[88vh] animate-in slide-in-from-bottom sm:zoom-in-95 duration-200">
+            {/* Mobile Top Drag Indicator */}
+            <div className="w-full flex justify-center pt-3 pb-1 sm:hidden shrink-0">
+              <div className="w-12 h-1.5 bg-neutral-700/80 rounded-full" />
+            </div>
+
+            {/* Pinned Header */}
+            <div className="flex items-center justify-between px-5 py-4 sm:px-6 sm:py-5 border-b border-neutral-800 shrink-0 bg-neutral-900/95 backdrop-blur-md">
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-indigo-500/20 text-indigo-400 rounded-xl">
+                <div className="p-2.5 bg-indigo-500/20 text-indigo-400 rounded-2xl border border-indigo-500/30">
                   <HandCoins className="h-5 w-5" />
                 </div>
                 <div>
-                  <h3 className="text-lg font-bold text-white">
+                  <h3 className="text-base sm:text-lg font-bold text-white leading-tight">
                     {editingLoanId ? 'Edit Data Pinjaman' : 'Buat Pinjaman Baru'}
                   </h3>
-                  <p className="text-xs text-neutral-400">
-                    Pencatatan pinjaman dana untuk karyawan atau owner.
+                  <p className="text-xs text-neutral-400 mt-0.5">
+                    Pencatatan pinjaman dana Karyawan atau Owner.
                   </p>
                 </div>
               </div>
               <button
+                type="button"
                 onClick={() => setIsLoanModalOpen(false)}
-                className="text-neutral-400 hover:text-white p-1 rounded-lg"
+                className="w-9 h-9 rounded-xl flex items-center justify-center bg-neutral-800/80 text-neutral-400 hover:text-white hover:bg-neutral-700 active:bg-neutral-750 transition-colors"
+                title="Tutup Modal"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
 
-            <form onSubmit={handleSaveLoan} className="p-6 space-y-4">
-              {/* Tipe Peminjam */}
-              <div>
-                <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-2">
-                  Tipe Peminjam
-                </label>
-                <div className="grid grid-cols-2 gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setLoanForm({ ...loanForm, type: 'employee', borrowerName: loanForm.borrowerName === 'Owner' ? '' : loanForm.borrowerName })}
-                    className={`py-3 px-4 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 border transition-all ${
-                      loanForm.type === 'employee'
-                        ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40 shadow-sm'
-                        : 'bg-neutral-950/50 text-neutral-400 border-neutral-800 hover:text-white'
-                    }`}
-                  >
-                    <User className="h-4 w-4" /> Karyawan
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setLoanForm({ ...loanForm, type: 'owner', borrowerName: 'Owner' })}
-                    className={`py-3 px-4 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 border transition-all ${
-                      loanForm.type === 'owner'
-                        ? 'bg-sky-500/20 text-sky-300 border-sky-500/40 shadow-sm'
-                        : 'bg-neutral-950/50 text-neutral-400 border-neutral-800 hover:text-white'
-                    }`}
-                  >
-                    <Building2 className="h-4 w-4" /> Owner / Prive
-                  </button>
+            {/* Form with Scrollable Content & Sticky Footer */}
+            <form onSubmit={handleSaveLoan} className="flex flex-col flex-1 min-h-0">
+              <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-4 sm:space-y-5 overscroll-contain">
+                {/* Tipe Peminjam */}
+                <div>
+                  <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-2">
+                    Tipe Peminjam <span className="text-rose-400">*</span>
+                  </label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setLoanForm({ ...loanForm, type: 'employee', borrowerName: loanForm.borrowerName === 'Owner' ? '' : loanForm.borrowerName })}
+                      className={`py-3.5 px-4 rounded-2xl text-sm font-semibold flex items-center justify-center gap-2 border transition-all ${
+                        loanForm.type === 'employee'
+                          ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/50 shadow-md shadow-indigo-500/10'
+                          : 'bg-neutral-950/60 text-neutral-400 border-neutral-800 hover:text-neutral-200'
+                      }`}
+                    >
+                      <User className="h-4 w-4 shrink-0" />
+                      <span>Karyawan</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setLoanForm({ ...loanForm, type: 'owner', borrowerName: 'Owner' })}
+                      className={`py-3.5 px-4 rounded-2xl text-sm font-semibold flex items-center justify-center gap-2 border transition-all ${
+                        loanForm.type === 'owner'
+                          ? 'bg-sky-500/20 text-sky-300 border-sky-500/50 shadow-md shadow-sky-500/10'
+                          : 'bg-neutral-950/60 text-neutral-400 border-neutral-800 hover:text-neutral-200'
+                      }`}
+                    >
+                      <Building2 className="h-4 w-4 shrink-0" />
+                      <span>Owner / Prive</span>
+                    </button>
+                  </div>
                 </div>
-              </div>
 
-              {/* Nama Peminjam */}
-              <div>
-                <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-1.5">
-                  Nama Peminjam *
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder={loanForm.type === 'owner' ? 'Owner' : 'Contoh: Ahmad, Siti, Rudi'}
-                  value={loanForm.borrowerName}
-                  onChange={(e) => setLoanForm({ ...loanForm, borrowerName: e.target.value })}
-                  className="w-full px-4 py-3 bg-neutral-950 border border-neutral-800 rounded-xl text-white placeholder-neutral-500 focus:outline-none focus:border-indigo-500 text-sm"
-                />
-              </div>
-
-              {/* Jumlah Pinjaman */}
-              <div>
-                <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-1.5">
-                  Nominal Pinjaman (Rp) *
-                </label>
-                <div className="relative">
-                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-500 font-bold">Rp</span>
-                  <input
-                    type="number"
-                    min="1"
-                    required
-                    placeholder="0"
-                    value={loanForm.amount || ''}
-                    onChange={(e) => setLoanForm({ ...loanForm, amount: Number(e.target.value) })}
-                    className="w-full pl-12 pr-4 py-3 bg-neutral-950 border border-neutral-800 rounded-xl text-white font-mono font-bold text-lg focus:outline-none focus:border-indigo-500"
-                  />
-                </div>
-              </div>
-
-              {/* Tanggal & Metode Pencairan */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Nama Peminjam */}
                 <div>
                   <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-1.5">
-                    Tanggal Pinjaman *
+                    Nama Peminjam <span className="text-rose-400">*</span>
                   </label>
                   <input
-                    type="date"
+                    type="text"
                     required
-                    value={loanForm.date}
-                    onChange={(e) => setLoanForm({ ...loanForm, date: e.target.value })}
-                    className="w-full px-4 py-3 bg-neutral-950 border border-neutral-800 rounded-xl text-white focus:outline-none focus:border-indigo-500 text-sm"
+                    placeholder={loanForm.type === 'owner' ? 'Owner' : 'Contoh: Ahmad, Siti, Rudi'}
+                    value={loanForm.borrowerName}
+                    onChange={(e) => setLoanForm({ ...loanForm, borrowerName: e.target.value })}
+                    className="w-full px-4 py-3.5 sm:py-3 bg-neutral-950 border border-neutral-800 rounded-xl text-white placeholder-neutral-500 focus:outline-none focus:border-indigo-500 text-base sm:text-sm transition-colors"
                   />
+                  {/* Quick Suggestions for Known Employees */}
+                  {loanForm.type === 'employee' && existingEmployeeNames.length > 0 && (
+                    <div className="mt-2 flex items-center gap-1.5 flex-wrap">
+                      <span className="text-[11px] text-neutral-500">Pilih cepat:</span>
+                      {existingEmployeeNames.slice(0, 5).map((name) => (
+                        <button
+                          key={name}
+                          type="button"
+                          onClick={() => setLoanForm({ ...loanForm, borrowerName: name })}
+                          className="text-[11px] px-2.5 py-1 rounded-lg bg-neutral-800/80 hover:bg-neutral-700 text-neutral-300 hover:text-white transition-colors"
+                        >
+                          {name}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
+
+                {/* Nominal Pinjaman (Rp) */}
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">
+                      Nominal Pinjaman (Rp) <span className="text-rose-400">*</span>
+                    </label>
+                    {loanForm.amount > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setLoanForm({ ...loanForm, amount: 0 })}
+                        className="text-xs text-rose-400 hover:text-rose-300 font-medium"
+                      >
+                        Reset (0)
+                      </button>
+                    )}
+                  </div>
+                  <div className="relative">
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-500 font-bold text-base">Rp</span>
+                    <input
+                      type="number"
+                      min="1"
+                      required
+                      placeholder="0"
+                      value={loanForm.amount || ''}
+                      onChange={(e) => setLoanForm({ ...loanForm, amount: Number(e.target.value) })}
+                      className="w-full pl-12 pr-4 py-3.5 bg-neutral-950 border border-neutral-800 rounded-xl text-white font-mono font-bold text-xl focus:outline-none focus:border-indigo-500 transition-colors"
+                    />
+                  </div>
+                  {/* Quick Amount Preset Chips for Fast Mobile Input */}
+                  <div className="mt-2.5 flex items-center gap-1.5 flex-wrap">
+                    {[250000, 500000, 1000000, 2000000, 5000000].map((amt) => (
+                      <button
+                        key={amt}
+                        type="button"
+                        onClick={() => setLoanForm({ ...loanForm, amount: (loanForm.amount || 0) + amt })}
+                        className="text-xs px-2.5 py-1.5 rounded-lg bg-neutral-800/90 hover:bg-indigo-600/30 text-neutral-300 hover:text-indigo-300 border border-neutral-750 transition-all font-mono font-medium active:scale-95"
+                      >
+                        +{formatRupiah(amt).replace('Rp ', '')}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Tanggal & Metode Pencairan */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-1.5">
+                      Tanggal Pinjaman <span className="text-rose-400">*</span>
+                    </label>
+                    <input
+                      type="date"
+                      required
+                      value={loanForm.date}
+                      onChange={(e) => setLoanForm({ ...loanForm, date: e.target.value })}
+                      className="w-full px-4 py-3.5 sm:py-3 bg-neutral-950 border border-neutral-800 rounded-xl text-white focus:outline-none focus:border-indigo-500 text-base sm:text-sm transition-colors"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-1.5">
+                      Metode Pencairan
+                    </label>
+                    <select
+                      value={loanForm.disbursementMethod}
+                      onChange={(e) => setLoanForm({ ...loanForm, disbursementMethod: e.target.value })}
+                      className="w-full px-4 py-3.5 sm:py-3 bg-neutral-950 border border-neutral-800 rounded-xl text-white focus:outline-none focus:border-indigo-500 text-base sm:text-sm transition-colors"
+                    >
+                      <option value="cash">Tunai / Cash</option>
+                      <option value="tf_bjb">Transfer BJB</option>
+                      <option value="tf_bri">Transfer BRI</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Keperluan / Catatan */}
                 <div>
                   <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-1.5">
-                    Metode Pencairan
+                    Keperluan / Catatan (Opsional)
                   </label>
-                  <select
-                    value={loanForm.disbursementMethod}
-                    onChange={(e) => setLoanForm({ ...loanForm, disbursementMethod: e.target.value })}
-                    className="w-full px-4 py-3 bg-neutral-950 border border-neutral-800 rounded-xl text-white focus:outline-none focus:border-indigo-500 text-sm"
-                  >
-                    <option value="cash">Tunai / Cash</option>
-                    <option value="tf_bjb">Transfer BJB</option>
-                    <option value="tf_bri">Transfer BRI</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* Catatan */}
-              <div>
-                <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-1.5">
-                  Keperluan / Catatan (Opsional)
-                </label>
-                <textarea
-                  rows={2}
-                  placeholder="Contoh: Kebutuhan darurat, biaya sekolah, dll"
-                  value={loanForm.notes}
-                  onChange={(e) => setLoanForm({ ...loanForm, notes: e.target.value })}
-                  className="w-full px-4 py-2.5 bg-neutral-950 border border-neutral-800 rounded-xl text-white placeholder-neutral-500 focus:outline-none focus:border-indigo-500 text-sm"
-                />
-              </div>
-
-              {/* Sinkronisasi Transaksi Kas */}
-              {!editingLoanId && (
-                <div className="p-3.5 bg-indigo-500/10 border border-indigo-500/20 rounded-xl flex items-start gap-3">
-                  <input
-                    type="checkbox"
-                    id="syncTxLoan"
-                    checked={loanForm.syncTransaction}
-                    onChange={(e) => setLoanForm({ ...loanForm, syncTransaction: e.target.checked })}
-                    className="mt-1 h-4 w-4 rounded border-neutral-700 bg-neutral-900 text-indigo-600 focus:ring-indigo-500"
+                  <textarea
+                    rows={2}
+                    placeholder="Contoh: Kebutuhan darurat, biaya sekolah, keperluan usaha"
+                    value={loanForm.notes}
+                    onChange={(e) => setLoanForm({ ...loanForm, notes: e.target.value })}
+                    className="w-full px-4 py-3 bg-neutral-950 border border-neutral-800 rounded-xl text-white placeholder-neutral-500 focus:outline-none focus:border-indigo-500 text-base sm:text-sm transition-colors"
                   />
-                  <label htmlFor="syncTxLoan" className="text-xs text-neutral-300 leading-relaxed cursor-pointer">
-                    <span className="font-semibold text-indigo-300">Otomatis catat pengeluaran di Buku Transaksi Kas</span>
-                    <br />
-                    Mencatat pengeluaran kas otomatis dengan kategori{' '}
-                    <span className="font-mono text-white">
-                      {loanForm.type === 'owner' ? 'Pinjaman Owner' : 'Pinjaman Karyawan'}
-                    </span>{' '}
-                    sehingga saldo kas tetap akurat.
-                  </label>
                 </div>
-              )}
 
-              {/* Submit Buttons */}
-              <div className="pt-2 flex items-center justify-end gap-3 border-t border-neutral-800/80">
-                <button
-                  type="button"
-                  onClick={() => setIsLoanModalOpen(false)}
-                  className="px-4 py-2.5 text-sm font-semibold text-neutral-400 hover:text-white rounded-xl"
-                >
-                  Batal
-                </button>
-                <button
-                  type="submit"
-                  className="px-6 py-2.5 text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-500 rounded-xl shadow-lg shadow-indigo-600/25 transition-all"
-                >
-                  {editingLoanId ? 'Simpan Perubahan' : 'Simpan Pinjaman'}
-                </button>
+                {/* Sinkronisasi Transaksi Kas */}
+                {!editingLoanId && (
+                  <div 
+                    onClick={() => setLoanForm({ ...loanForm, syncTransaction: !loanForm.syncTransaction })}
+                    className="p-3.5 bg-indigo-500/10 border border-indigo-500/20 rounded-xl flex items-start gap-3 cursor-pointer hover:bg-indigo-500/15 transition-colors"
+                  >
+                    <input
+                      type="checkbox"
+                      id="syncTxLoan"
+                      checked={loanForm.syncTransaction}
+                      onChange={(e) => setLoanForm({ ...loanForm, syncTransaction: e.target.checked })}
+                      onClick={(e) => e.stopPropagation()}
+                      className="mt-1 h-4 w-4 rounded border-neutral-700 bg-neutral-900 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                    />
+                    <label htmlFor="syncTxLoan" className="text-xs text-neutral-300 leading-relaxed cursor-pointer select-none">
+                      <span className="font-semibold text-indigo-300">Otomatis catat pengeluaran di Buku Transaksi Kas</span>
+                      <br />
+                      Mencatat pengeluaran kas dengan kategori{' '}
+                      <span className="font-mono text-white">
+                        {loanForm.type === 'owner' ? 'Pinjaman Owner' : 'Pinjaman Karyawan'}
+                      </span>{' '}
+                      agar saldo kas riil langsung sinkron.
+                    </label>
+                  </div>
+                )}
+              </div>
+
+              {/* STICKY FOOTER ACTION BUTTONS */}
+              <div className="shrink-0 p-4 sm:p-5 bg-neutral-950/95 sm:bg-neutral-900/95 backdrop-blur-md border-t border-neutral-800/80 pb-7 sm:pb-5">
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setIsLoanModalOpen(false)}
+                    className="w-1/3 sm:w-auto px-5 py-3.5 sm:py-3 text-sm font-semibold text-neutral-300 bg-neutral-800 hover:bg-neutral-700 active:bg-neutral-750 rounded-xl transition-all"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 sm:flex-none sm:px-8 py-3.5 sm:py-3 text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 rounded-xl shadow-lg shadow-indigo-600/30 transition-all flex items-center justify-center gap-2"
+                  >
+                    <CheckCircle2 className="h-4 w-4 shrink-0" />
+                    <span>{editingLoanId ? 'Simpan Perubahan' : 'Simpan Pinjaman'}</span>
+                  </button>
+                </div>
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* ======================================================== */}
       {/* 2. MODAL BAYAR / CICIL PINJAMAN                          */}
       {/* ======================================================== */}
-      {isPaymentModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm overflow-y-auto">
-          <div className="bg-neutral-900 border border-neutral-800 rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-200">
-            <div className="flex items-center justify-between p-6 border-b border-neutral-800">
+      {isPaymentModalOpen && typeof document !== 'undefined' && createPortal(
+        <div 
+          className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200"
+          role="dialog"
+          aria-modal="true"
+        >
+          {/* Backdrop click to close */}
+          <div 
+            className="absolute inset-0 -z-10" 
+            onClick={() => setIsPaymentModalOpen(false)} 
+          />
+
+          <div className="relative bg-neutral-900 border-t sm:border border-neutral-800 rounded-t-[2.5rem] sm:rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl flex flex-col max-h-[92vh] sm:max-h-[88vh] animate-in slide-in-from-bottom sm:zoom-in-95 duration-200">
+            {/* Mobile Top Drag Indicator */}
+            <div className="w-full flex justify-center pt-3 pb-1 sm:hidden shrink-0">
+              <div className="w-12 h-1.5 bg-neutral-700/80 rounded-full" />
+            </div>
+
+            {/* Pinned Header */}
+            <div className="flex items-center justify-between px-5 py-4 sm:px-6 sm:py-5 border-b border-neutral-800 shrink-0 bg-neutral-900/95 backdrop-blur-md">
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-emerald-500/20 text-emerald-400 rounded-xl">
+                <div className="p-2.5 bg-emerald-500/20 text-emerald-400 rounded-2xl border border-emerald-500/30">
                   <Receipt className="h-5 w-5" />
                 </div>
                 <div>
-                  <h3 className="text-lg font-bold text-white">Catat Pembayaran Pinjaman</h3>
-                  <p className="text-xs text-neutral-400">
-                    Pelunasan atau cicilan pinjaman yang masuk ke kas.
+                  <h3 className="text-base sm:text-lg font-bold text-white leading-tight">
+                    Catat Pembayaran Pinjaman
+                  </h3>
+                  <p className="text-xs text-neutral-400 mt-0.5">
+                    Pelunasan atau cicilan pinjaman masuk ke kas.
                   </p>
                 </div>
               </div>
               <button
+                type="button"
                 onClick={() => setIsPaymentModalOpen(false)}
-                className="text-neutral-400 hover:text-white p-1 rounded-lg"
+                className="w-9 h-9 rounded-xl flex items-center justify-center bg-neutral-800/80 text-neutral-400 hover:text-white hover:bg-neutral-700 active:bg-neutral-750 transition-colors"
+                title="Tutup Modal"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
 
-            <form onSubmit={handleSavePayment} className="p-6 space-y-4">
-              {/* Target Pinjaman */}
-              <div>
-                <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-1.5">
-                  Pilih Pinjaman *
-                </label>
-                <select
-                  required
-                  value={paymentForm.loanId}
-                  onChange={(e) => {
-                    const id = e.target.value;
-                    const found = loans.find(l => l.id === id);
-                    setSelectedLoanForPayment(found || null);
-                    const rem = found ? getLoanRemaining(found) : 0;
-                    setPaymentForm({
-                      ...paymentForm,
-                      loanId: id,
-                      amount: rem > 0 ? rem : paymentForm.amount
-                    });
-                  }}
-                  className="w-full px-4 py-3 bg-neutral-950 border border-neutral-800 rounded-xl text-white focus:outline-none focus:border-emerald-500 text-sm"
-                >
-                  <option value="" disabled>-- Pilih Pinjaman --</option>
-                  {loans.map(l => {
-                    const rem = getLoanRemaining(l);
-                    return (
-                      <option key={l.id} value={l.id}>
-                        {l.borrowerName} ({l.type === 'owner' ? 'Owner' : 'Karyawan'}) - Sisa: {formatRupiah(rem)} {rem <= 0 ? '(Lunas)' : ''}
-                      </option>
-                    );
-                  })}
-                </select>
-              </div>
-
-              {/* Info Sisa Tagihan */}
-              {selectedLoanForPayment && (
-                <div className="p-4 bg-neutral-950/70 border border-neutral-800 rounded-2xl flex items-center justify-between">
-                  <div>
-                    <span className="text-xs text-neutral-400">Total Pinjaman:</span>
-                    <div className="text-sm font-mono font-bold text-white">
-                      {formatRupiah(selectedLoanForPayment.amount)}
-                    </div>
-                  </div>
-                  <div>
-                    <span className="text-xs text-neutral-400">Sudah Dibayar:</span>
-                    <div className="text-sm font-mono font-bold text-emerald-400">
-                      {formatRupiah(getLoanTotalPaid(selectedLoanForPayment))}
-                    </div>
-                  </div>
-                  <div>
-                    <span className="text-xs text-neutral-400">Sisa Tagihan:</span>
-                    <div className="text-sm font-mono font-bold text-rose-400">
-                      {formatRupiah(getLoanRemaining(selectedLoanForPayment))}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Jumlah Pembayaran */}
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">
-                    Jumlah Bayar (Rp) *
-                  </label>
-                  {selectedLoanForPayment && getLoanRemaining(selectedLoanForPayment) > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => setPaymentForm({ ...paymentForm, amount: getLoanRemaining(selectedLoanForPayment) })}
-                      className="text-xs text-emerald-400 hover:text-emerald-300 font-semibold underline"
-                    >
-                      Lunasi Seluruh Sisa ({formatRupiah(getLoanRemaining(selectedLoanForPayment))})
-                    </button>
-                  )}
-                </div>
-                <div className="relative">
-                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-500 font-bold">Rp</span>
-                  <input
-                    type="number"
-                    min="1"
-                    required
-                    placeholder="0"
-                    value={paymentForm.amount || ''}
-                    onChange={(e) => setPaymentForm({ ...paymentForm, amount: Number(e.target.value) })}
-                    className="w-full pl-12 pr-4 py-3 bg-neutral-950 border border-neutral-800 rounded-xl text-white font-mono font-bold text-lg focus:outline-none focus:border-emerald-500"
-                  />
-                </div>
-              </div>
-
-              {/* Tanggal & Metode */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Form with Scrollable Content & Sticky Footer */}
+            <form onSubmit={handleSavePayment} className="flex flex-col flex-1 min-h-0">
+              <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-4 sm:space-y-5 overscroll-contain">
+                {/* Target Pinjaman */}
                 <div>
                   <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-1.5">
-                    Tanggal Pembayaran *
-                  </label>
-                  <input
-                    type="date"
-                    required
-                    value={paymentForm.date}
-                    onChange={(e) => setPaymentForm({ ...paymentForm, date: e.target.value })}
-                    className="w-full px-4 py-3 bg-neutral-950 border border-neutral-800 rounded-xl text-white focus:outline-none focus:border-emerald-500 text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-1.5">
-                    Metode Pembayaran
+                    Pilih Pinjaman <span className="text-rose-400">*</span>
                   </label>
                   <select
-                    value={paymentForm.method}
-                    onChange={(e) => setPaymentForm({ ...paymentForm, method: e.target.value })}
-                    className="w-full px-4 py-3 bg-neutral-950 border border-neutral-800 rounded-xl text-white focus:outline-none focus:border-emerald-500 text-sm"
+                    required
+                    value={paymentForm.loanId}
+                    onChange={(e) => {
+                      const id = e.target.value;
+                      const found = loans.find(l => l.id === id);
+                      setSelectedLoanForPayment(found || null);
+                      const rem = found ? getLoanRemaining(found) : 0;
+                      setPaymentForm({
+                        ...paymentForm,
+                        loanId: id,
+                        amount: rem > 0 ? rem : paymentForm.amount
+                      });
+                    }}
+                    className="w-full px-4 py-3.5 sm:py-3 bg-neutral-950 border border-neutral-800 rounded-xl text-white focus:outline-none focus:border-emerald-500 text-base sm:text-sm transition-colors"
                   >
-                    <option value="cash">Cash / Tunai</option>
-                    <option value="tf_bjb">Transfer BJB</option>
-                    <option value="tf_bri">Transfer BRI</option>
+                    <option value="" disabled>-- Pilih Pinjaman --</option>
+                    {loans.map(l => {
+                      const rem = getLoanRemaining(l);
+                      return (
+                        <option key={l.id} value={l.id}>
+                          {l.borrowerName} ({l.type === 'owner' ? 'Owner' : 'Karyawan'}) - Sisa: {formatRupiah(rem)} {rem <= 0 ? '(Lunas)' : ''}
+                        </option>
+                      );
+                    })}
                   </select>
+                </div>
+
+                {/* Info Sisa Tagihan */}
+                {selectedLoanForPayment && (
+                  <div className="p-3.5 sm:p-4 bg-neutral-950/80 border border-neutral-800 rounded-2xl grid grid-cols-3 gap-2 text-center">
+                    <div>
+                      <span className="text-[11px] text-neutral-400 block">Total Pinjaman</span>
+                      <div className="text-xs sm:text-sm font-mono font-bold text-white mt-0.5 truncate">
+                        {formatRupiah(selectedLoanForPayment.amount)}
+                      </div>
+                    </div>
+                    <div>
+                      <span className="text-[11px] text-neutral-400 block">Sudah Dibayar</span>
+                      <div className="text-xs sm:text-sm font-mono font-bold text-emerald-400 mt-0.5 truncate">
+                        {formatRupiah(getLoanTotalPaid(selectedLoanForPayment))}
+                      </div>
+                    </div>
+                    <div>
+                      <span className="text-[11px] text-neutral-400 block">Sisa Tagihan</span>
+                      <div className="text-xs sm:text-sm font-mono font-bold text-rose-400 mt-0.5 truncate">
+                        {formatRupiah(getLoanRemaining(selectedLoanForPayment))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Jumlah Pembayaran */}
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">
+                      Jumlah Bayar (Rp) <span className="text-rose-400">*</span>
+                    </label>
+                    {selectedLoanForPayment && getLoanRemaining(selectedLoanForPayment) > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setPaymentForm({ ...paymentForm, amount: getLoanRemaining(selectedLoanForPayment) })}
+                        className="text-xs text-emerald-400 hover:text-emerald-300 font-semibold underline active:opacity-80"
+                      >
+                        Lunasi Seluruh Sisa ({formatRupiah(getLoanRemaining(selectedLoanForPayment))})
+                      </button>
+                    )}
+                  </div>
+                  <div className="relative">
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-500 font-bold text-base">Rp</span>
+                    <input
+                      type="number"
+                      min="1"
+                      required
+                      placeholder="0"
+                      value={paymentForm.amount || ''}
+                      onChange={(e) => setPaymentForm({ ...paymentForm, amount: Number(e.target.value) })}
+                      className="w-full pl-12 pr-4 py-3.5 bg-neutral-950 border border-neutral-800 rounded-xl text-white font-mono font-bold text-xl focus:outline-none focus:border-emerald-500 transition-colors"
+                    />
+                  </div>
+                  {/* Quick Amount Chips */}
+                  <div className="mt-2.5 flex items-center gap-1.5 flex-wrap">
+                    {[100000, 250000, 500000, 1000000].map((amt) => (
+                      <button
+                        key={amt}
+                        type="button"
+                        onClick={() => setPaymentForm({ ...paymentForm, amount: (paymentForm.amount || 0) + amt })}
+                        className="text-xs px-2.5 py-1.5 rounded-lg bg-neutral-800/90 hover:bg-emerald-600/30 text-neutral-300 hover:text-emerald-300 border border-neutral-750 transition-all font-mono font-medium active:scale-95"
+                      >
+                        +{formatRupiah(amt).replace('Rp ', '')}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Tanggal & Metode */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-1.5">
+                      Tanggal Pembayaran <span className="text-rose-400">*</span>
+                    </label>
+                    <input
+                      type="date"
+                      required
+                      value={paymentForm.date}
+                      onChange={(e) => setPaymentForm({ ...paymentForm, date: e.target.value })}
+                      className="w-full px-4 py-3.5 sm:py-3 bg-neutral-950 border border-neutral-800 rounded-xl text-white focus:outline-none focus:border-emerald-500 text-base sm:text-sm transition-colors"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-1.5">
+                      Metode Pembayaran
+                    </label>
+                    <select
+                      value={paymentForm.method}
+                      onChange={(e) => setPaymentForm({ ...paymentForm, method: e.target.value })}
+                      className="w-full px-4 py-3.5 sm:py-3 bg-neutral-950 border border-neutral-800 rounded-xl text-white focus:outline-none focus:border-emerald-500 text-base sm:text-sm transition-colors"
+                    >
+                      <option value="cash">Cash / Tunai</option>
+                      <option value="tf_bjb">Transfer BJB</option>
+                      <option value="tf_bri">Transfer BRI</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Catatan / Keterangan */}
+                <div>
+                  <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-1.5">
+                    Catatan / Keterangan (Opsional)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Contoh: Potong gaji bulan Maret, transfer langsung"
+                    value={paymentForm.notes}
+                    onChange={(e) => setPaymentForm({ ...paymentForm, notes: e.target.value })}
+                    className="w-full px-4 py-3 bg-neutral-950 border border-neutral-800 rounded-xl text-white placeholder-neutral-500 focus:outline-none focus:border-emerald-500 text-base sm:text-sm transition-colors"
+                  />
+                </div>
+
+                {/* Sinkronisasi Transaksi Kas */}
+                <div 
+                  onClick={() => setPaymentForm({ ...paymentForm, syncTransaction: !paymentForm.syncTransaction })}
+                  className="p-3.5 bg-emerald-500/10 border border-emerald-500/20 rounded-xl flex items-start gap-3 cursor-pointer hover:bg-emerald-500/15 transition-colors"
+                >
+                  <input
+                    type="checkbox"
+                    id="syncTxPayment"
+                    checked={paymentForm.syncTransaction}
+                    onChange={(e) => setPaymentForm({ ...paymentForm, syncTransaction: e.target.checked })}
+                    onClick={(e) => e.stopPropagation()}
+                    className="mt-1 h-4 w-4 rounded border-neutral-700 bg-neutral-900 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                  />
+                  <label htmlFor="syncTxPayment" className="text-xs text-neutral-300 leading-relaxed cursor-pointer select-none">
+                    <span className="font-semibold text-emerald-300">Otomatis catat pemasukan di Buku Transaksi Kas</span>
+                    <br />
+                    Mencatat kas masuk otomatis dengan kategori{' '}
+                    <span className="font-mono text-white">Pelunasan Pinjaman</span> agar masuk ke perhitungan laporan bulanan.
+                  </label>
                 </div>
               </div>
 
-              {/* Catatan / Keterangan */}
-              <div>
-                <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-1.5">
-                  Catatan / Keterangan (Opsional)
-                </label>
-                <input
-                  type="text"
-                  placeholder="Contoh: Potong gaji bulan Maret, transfer langsung"
-                  value={paymentForm.notes}
-                  onChange={(e) => setPaymentForm({ ...paymentForm, notes: e.target.value })}
-                  className="w-full px-4 py-2.5 bg-neutral-950 border border-neutral-800 rounded-xl text-white placeholder-neutral-500 focus:outline-none focus:border-emerald-500 text-sm"
-                />
-              </div>
-
-              {/* Sinkronisasi Transaksi Kas */}
-              <div className="p-3.5 bg-emerald-500/10 border border-emerald-500/20 rounded-xl flex items-start gap-3">
-                <input
-                  type="checkbox"
-                  id="syncTxPayment"
-                  checked={paymentForm.syncTransaction}
-                  onChange={(e) => setPaymentForm({ ...paymentForm, syncTransaction: e.target.checked })}
-                  className="mt-1 h-4 w-4 rounded border-neutral-700 bg-neutral-900 text-emerald-600 focus:ring-emerald-500"
-                />
-                <label htmlFor="syncTxPayment" className="text-xs text-neutral-300 leading-relaxed cursor-pointer">
-                  <span className="font-semibold text-emerald-300">Otomatis catat pemasukan di Buku Transaksi Kas</span>
-                  <br />
-                  Mencatat kas masuk otomatis dengan kategori{' '}
-                  <span className="font-mono text-white">Pelunasan Pinjaman</span> agar masuk ke perhitungan laporan bulanan.
-                </label>
-              </div>
-
-              {/* Submit Buttons */}
-              <div className="pt-2 flex items-center justify-end gap-3 border-t border-neutral-800/80">
-                <button
-                  type="button"
-                  onClick={() => setIsPaymentModalOpen(false)}
-                  className="px-4 py-2.5 text-sm font-semibold text-neutral-400 hover:text-white rounded-xl"
-                >
-                  Batal
-                </button>
-                <button
-                  type="submit"
-                  className="px-6 py-2.5 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-500 rounded-xl shadow-lg shadow-emerald-600/25 transition-all"
-                >
-                  Simpan Pembayaran
-                </button>
+              {/* STICKY FOOTER ACTION BUTTONS */}
+              <div className="shrink-0 p-4 sm:p-5 bg-neutral-950/95 sm:bg-neutral-900/95 backdrop-blur-md border-t border-neutral-800/80 pb-7 sm:pb-5">
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setIsPaymentModalOpen(false)}
+                    className="w-1/3 sm:w-auto px-5 py-3.5 sm:py-3 text-sm font-semibold text-neutral-300 bg-neutral-800 hover:bg-neutral-700 active:bg-neutral-750 rounded-xl transition-all"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 sm:flex-none sm:px-8 py-3.5 sm:py-3 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 rounded-xl shadow-lg shadow-emerald-600/30 transition-all flex items-center justify-center gap-2"
+                  >
+                    <CheckCircle2 className="h-4 w-4 shrink-0" />
+                    <span>Simpan Pembayaran</span>
+                  </button>
+                </div>
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* ======================================================== */}
       {/* 3. MODAL RIWAYAT PEMBAYARAN                              */}
       {/* ======================================================== */}
-      {isHistoryModalOpen && selectedLoanForHistory && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm overflow-y-auto">
-          <div className="bg-neutral-900 border border-neutral-800 rounded-3xl w-full max-w-xl overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-200">
-            <div className="flex items-center justify-between p-6 border-b border-neutral-800">
+      {isHistoryModalOpen && selectedLoanForHistory && typeof document !== 'undefined' && createPortal(
+        <div 
+          className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200"
+          role="dialog"
+          aria-modal="true"
+        >
+          {/* Backdrop click to close */}
+          <div 
+            className="absolute inset-0 -z-10" 
+            onClick={() => setIsHistoryModalOpen(false)} 
+          />
+
+          <div className="relative bg-neutral-900 border-t sm:border border-neutral-800 rounded-t-[2.5rem] sm:rounded-3xl w-full max-w-xl overflow-hidden shadow-2xl flex flex-col max-h-[92vh] sm:max-h-[88vh] animate-in slide-in-from-bottom sm:zoom-in-95 duration-200">
+            {/* Mobile Top Drag Indicator */}
+            <div className="w-full flex justify-center pt-3 pb-1 sm:hidden shrink-0">
+              <div className="w-12 h-1.5 bg-neutral-700/80 rounded-full" />
+            </div>
+
+            {/* Pinned Header */}
+            <div className="flex items-center justify-between px-5 py-4 sm:px-6 sm:py-5 border-b border-neutral-800 shrink-0 bg-neutral-900/95 backdrop-blur-md">
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-indigo-500/20 text-indigo-400 rounded-xl">
+                <div className="p-2.5 bg-indigo-500/20 text-indigo-400 rounded-2xl border border-indigo-500/30">
                   <History className="h-5 w-5" />
                 </div>
                 <div>
-                  <h3 className="text-lg font-bold text-white">
-                    Riwayat Pembayaran: {selectedLoanForHistory.borrowerName}
+                  <h3 className="text-base sm:text-lg font-bold text-white leading-tight">
+                    Riwayat: {selectedLoanForHistory.borrowerName}
                   </h3>
-                  <p className="text-xs text-neutral-400">
-                    Daftar cicilan dan pelunasan pinjaman ini.
+                  <p className="text-xs text-neutral-400 mt-0.5">
+                    Daftar pelunasan & cicilan pinjaman ini.
                   </p>
                 </div>
               </div>
               <button
+                type="button"
                 onClick={() => setIsHistoryModalOpen(false)}
-                className="text-neutral-400 hover:text-white p-1 rounded-lg"
+                className="w-9 h-9 rounded-xl flex items-center justify-center bg-neutral-800/80 text-neutral-400 hover:text-white hover:bg-neutral-700 active:bg-neutral-750 transition-colors"
+                title="Tutup Modal"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
 
-            <div className="p-6 space-y-4">
+            {/* Scrollable Body */}
+            <div className="p-5 sm:p-6 space-y-4 overflow-y-auto flex-1 overscroll-contain">
               {/* Summary Card */}
-              <div className="grid grid-cols-3 gap-3 p-4 bg-neutral-950 rounded-2xl border border-neutral-800 text-center">
+              <div className="grid grid-cols-3 gap-2.5 p-3.5 sm:p-4 bg-neutral-950 rounded-2xl border border-neutral-800 text-center">
                 <div>
-                  <span className="text-[11px] text-neutral-400 uppercase font-semibold">Total Pinjaman</span>
-                  <div className="text-sm sm:text-base font-bold text-white font-mono mt-1">
+                  <span className="text-[11px] text-neutral-400 uppercase font-semibold block">Total Pinjaman</span>
+                  <div className="text-xs sm:text-base font-bold text-white font-mono mt-1 truncate">
                     {formatRupiah(selectedLoanForHistory.amount)}
                   </div>
                 </div>
                 <div>
-                  <span className="text-[11px] text-neutral-400 uppercase font-semibold">Total Terbayar</span>
-                  <div className="text-sm sm:text-base font-bold text-emerald-400 font-mono mt-1">
+                  <span className="text-[11px] text-neutral-400 uppercase font-semibold block">Terbayar</span>
+                  <div className="text-xs sm:text-base font-bold text-emerald-400 font-mono mt-1 truncate">
                     {formatRupiah(getLoanTotalPaid(selectedLoanForHistory))}
                   </div>
                 </div>
                 <div>
-                  <span className="text-[11px] text-neutral-400 uppercase font-semibold">Sisa Tagihan</span>
-                  <div className="text-sm sm:text-base font-bold text-rose-400 font-mono mt-1">
+                  <span className="text-[11px] text-neutral-400 uppercase font-semibold block">Sisa Tagihan</span>
+                  <div className="text-xs sm:text-base font-bold text-rose-400 font-mono mt-1 truncate">
                     {formatRupiah(getLoanRemaining(selectedLoanForHistory))}
                   </div>
                 </div>
               </div>
 
               {/* Payments List */}
-              <div className="space-y-2">
+              <div className="space-y-2.5">
                 <div className="flex items-center justify-between">
                   <h4 className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">
                     Daftar Pembayaran ({selectedLoanForHistory.payments?.length || 0})
                   </h4>
                   {getLoanRemaining(selectedLoanForHistory) > 0 && (
                     <button
+                      type="button"
                       onClick={() => {
                         handleOpenPaymentModal(selectedLoanForHistory);
                       }}
-                      className="text-xs text-emerald-400 hover:text-emerald-300 font-semibold flex items-center gap-1"
+                      className="text-xs text-emerald-400 hover:text-emerald-300 font-semibold flex items-center gap-1 active:opacity-80"
                     >
                       <Plus className="h-3.5 w-3.5" /> Bayar Sekarang
                     </button>
@@ -1090,7 +1248,7 @@ export default function Loans({
                     Belum ada pembayaran yang dicatat untuk pinjaman ini.
                   </div>
                 ) : (
-                  <div className="divide-y divide-neutral-800/60 max-h-64 overflow-y-auto border border-neutral-800/60 rounded-2xl bg-neutral-950/30">
+                  <div className="divide-y divide-neutral-800/60 max-h-72 overflow-y-auto border border-neutral-800/60 rounded-2xl bg-neutral-950/30">
                     {selectedLoanForHistory.payments.map((p, idx) => (
                       <div key={p.id || idx} className="p-3.5 flex items-center justify-between hover:bg-neutral-800/30 transition-colors">
                         <div>
@@ -1103,15 +1261,16 @@ export default function Loans({
                             </span>
                           </div>
                           <div className="text-xs text-neutral-400 mt-0.5 flex items-center gap-2">
-                            <Calendar className="h-3 w-3 text-neutral-500" />
+                            <Calendar className="h-3 w-3 text-neutral-500 shrink-0" />
                             <span>{format(parseISO(p.date), 'dd MMMM yyyy')}</span>
                             {p.notes && <span>• {p.notes}</span>}
                           </div>
                         </div>
 
                         <button
+                          type="button"
                           onClick={() => handleDeletePaymentClick(selectedLoanForHistory.id, p.id)}
-                          className="p-1.5 text-neutral-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors"
+                          className="p-2 text-neutral-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors active:scale-95"
                           title="Hapus Pembayaran Ini"
                         >
                           <Trash2 className="h-4 w-4" />
@@ -1121,19 +1280,33 @@ export default function Loans({
                   </div>
                 )}
               </div>
+            </div>
 
-              <div className="pt-2 flex justify-end">
+            {/* Sticky Footer */}
+            <div className="shrink-0 p-4 sm:p-5 bg-neutral-950/95 sm:bg-neutral-900/95 backdrop-blur-md border-t border-neutral-800/80 pb-7 sm:pb-5 flex justify-end gap-3">
+              {getLoanRemaining(selectedLoanForHistory) > 0 && (
                 <button
                   type="button"
-                  onClick={() => setIsHistoryModalOpen(false)}
-                  className="px-5 py-2.5 text-sm font-semibold text-neutral-300 bg-neutral-800 hover:bg-neutral-700 rounded-xl"
+                  onClick={() => {
+                    handleOpenPaymentModal(selectedLoanForHistory);
+                  }}
+                  className="flex-1 sm:flex-none px-5 py-3 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-500 rounded-xl transition-all flex items-center justify-center gap-1.5"
                 >
-                  Tutup
+                  <Receipt className="h-4 w-4" />
+                  <span>Bayar Cicilan</span>
                 </button>
-              </div>
+              )}
+              <button
+                type="button"
+                onClick={() => setIsHistoryModalOpen(false)}
+                className="flex-1 sm:flex-none px-6 py-3 text-sm font-semibold text-neutral-300 bg-neutral-800 hover:bg-neutral-700 rounded-xl transition-all"
+              >
+                Tutup
+              </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

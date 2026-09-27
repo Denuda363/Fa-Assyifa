@@ -196,7 +196,7 @@ export default function App() {
         </div>
 
         {/* Mobile Floating Bottom Nav */}
-        <div className="md:hidden fixed bottom-6 left-4 right-4 bg-neutral-900/80 backdrop-blur-2xl border border-neutral-800/80 shadow-[0_20px_40px_rgb(0,0,0,0.5)] rounded-[2rem] z-50 p-2 flex justify-between items-center">
+        <div className="md:hidden fixed bottom-6 left-4 right-4 bg-neutral-900/80 backdrop-blur-2xl border border-neutral-800/80 shadow-[0_20px_40px_rgb(0,0,0,0.5)] rounded-[2rem] z-30 p-2 flex justify-between items-center">
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = activeTab === item.id;
