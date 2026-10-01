@@ -1,0 +1,116 @@
+{
+  "entities": {
+    "Transaction": {
+      "title": "Transaction",
+      "description": "Catatan transaksi pemasukan dan pengeluaran",
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["income", "outcome"]
+        },
+        "method": {
+          "type": "string"
+        },
+        "category": {
+          "type": "string"
+        },
+        "amount": {
+          "type": "number"
+        },
+        "date": {
+          "type": "string"
+        },
+        "notes": {
+          "type": "string"
+        },
+        "timestamp": {
+          "type": "number"
+        }
+      },
+      "required": ["type", "amount", "date"]
+    },
+    "Loan": {
+      "title": "Loan",
+      "description": "Catatan pinjaman karyawan dan owner",
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["employee", "owner"]
+        },
+        "borrowerName": {
+          "type": "string"
+        },
+        "amount": {
+          "type": "number"
+        },
+        "date": {
+          "type": "string"
+        },
+        "notes": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["active", "paid"]
+        },
+        "payments": {
+          "type": "array"
+        },
+        "transactionId": {
+          "type": "string"
+        },
+        "disbursementMethod": {
+          "type": "string"
+        },
+        "timestamp": {
+          "type": "number"
+        }
+      },
+      "required": ["borrowerName", "amount", "date", "status"]
+    },
+    "Profile": {
+      "title": "Profile",
+      "description": "Pengaturan profil apotek dan saldo",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "address": {
+          "type": "string"
+        },
+        "whatsapp": {
+          "type": "string"
+        },
+        "customOutcomeCategories": {
+          "type": "array"
+        },
+        "customIncomeCategories": {
+          "type": "array"
+        },
+        "customOutcomeTfCategories": {
+          "type": "array"
+        },
+        "previousMonthBalances": {
+          "type": "object"
+        }
+      }
+    }
+  },
+  "firestore": {
+    "/transactions/{transactionId}": {
+      "schema": "Transaction",
+      "description": "Koleksi data transaksi operasional apotek"
+    },
+    "/loans/{loanId}": {
+      "schema": "Loan",
+      "description": "Koleksi data pinjaman karyawan dan owner"
+    },
+    "/settings/profile": {
+      "schema": "Profile",
+      "description": "Dokumen profil perusahaan dan saldo bulan kemarin"
+    }
+  }
+}

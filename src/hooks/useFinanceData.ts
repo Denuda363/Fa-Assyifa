@@ -18,50 +18,83 @@ export function useFinanceData() {
   const [loans, setLoans] = useState<Loan[]>([]);
   const [profile, setProfile] = useState<CompanyProfile>(DEFAULT_PROFILE);
   const [loading, setLoading] = useState(true);
+  const [isOnline, setIsOnline] = useState(() => typeof navigator !== 'undefined' ? navigator.onLine : true);
+
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
 
   useEffect(() => {
     // Listen to transactions
     const qTx = query(collection(db, 'transactions'), orderBy('timestamp', 'desc'));
-    const unsubscribeTx = onSnapshot(qTx, (snapshot) => {
-      const txs = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as Transaction[];
-      setTransactions(txs);
-      setLoading(false);
-    });
+    const unsubscribeTx = onSnapshot(
+      qTx, 
+      (snapshot) => {
+        const txs = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        })) as Transaction[];
+        setTransactions(txs);
+        setLoading(false);
+      },
+      (error) => {
+        console.warn('Transactions snapshot notice (offline/reconnecting):', error.message);
+        setLoading(false);
+      }
+    );
 
     // Listen to loans
     const qLoans = query(collection(db, 'loans'), orderBy('timestamp', 'desc'));
-    const unsubscribeLoans = onSnapshot(qLoans, (snapshot) => {
-      const loanList = snapshot.docs.map(doc => {
-        const data = doc.data();
-        return {
-          id: doc.id,
-          type: data.type || 'employee',
-          borrowerName: data.borrowerName || '',
-          amount: Number(data.amount) || 0,
-          date: data.date || new Date().toISOString().split('T')[0],
-          notes: data.notes || '',
-          status: data.status || 'active',
-          payments: Array.isArray(data.payments) ? data.payments : [],
-          transactionId: data.transactionId || null,
-          disbursementMethod: data.disbursementMethod || 'cash',
-          timestamp: data.timestamp || Date.now()
-        } as Loan;
-      });
-      setLoans(loanList);
-    });
+    const unsubscribeLoans = onSnapshot(
+      qLoans, 
+      (snapshot) => {
+        const loanList = snapshot.docs.map(doc => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            type: data.type || 'employee',
+            borrowerName: data.borrowerName || '',
+            amount: Number(data.amount) || 0,
+            date: data.date || new Date().toISOString().split('T')[0],
+            notes: data.notes || '',
+            status: data.status || 'active',
+            payments: Array.isArray(data.payments) ? data.payments : [],
+            transactionId: data.transactionId || null,
+            disbursementMethod: data.disbursementMethod || 'cash',
+            timestamp: data.timestamp || Date.now()
+          } as Loan;
+        });
+        setLoans(loanList);
+      },
+      (error) => {
+        console.warn('Loans snapshot notice (offline/reconnecting):', error.message);
+      }
+    );
 
     // Listen to profile
     const profileRef = doc(db, 'settings', 'profile');
-    const unsubscribeProfile = onSnapshot(profileRef, (docSnap) => {
-      if (docSnap.exists()) {
-        setProfile(docSnap.data() as CompanyProfile);
-      } else {
-        setDoc(profileRef, DEFAULT_PROFILE);
+    const unsubscribeProfile = onSnapshot(
+      profileRef, 
+      (docSnap) => {
+        if (docSnap.exists()) {
+          setProfile(docSnap.data() as CompanyProfile);
+        } else {
+          setDoc(profileRef, DEFAULT_PROFILE).catch((err) => {
+            console.warn('Could not initialize default profile:', err);
+          });
+        }
+      },
+      (error) => {
+        console.warn('Profile snapshot notice (offline/reconnecting):', error.message);
       }
-    });
+    );
 
     return () => {
       unsubscribeTx();
@@ -264,6 +297,7 @@ export function useFinanceData() {
     loans,
     profile,
     loading,
+    isOnline,
     addTransaction,
     updateTransaction,
     deleteTransaction,

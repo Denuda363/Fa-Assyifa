@@ -1,5 +1,6 @@
 import { initializeApp } from 'firebase/app';
-import { getFirestore } from 'firebase/firestore';
+import { getAuth } from 'firebase/auth';
+import { initializeFirestore } from 'firebase/firestore';
 import config from '../firebase-applet-config.json';
 
 const firebaseConfig = {
@@ -11,6 +12,14 @@ const firebaseConfig = {
   appId: config.appId
 };
 
-const app = initializeApp(firebaseConfig);
-// Provide databaseId if using a named database
-export const db = getFirestore(app, config.firestoreDatabaseId);
+export const app = initializeApp(firebaseConfig);
+export const auth = getAuth(app);
+
+// Configure Firestore with long polling to ensure reliable connectivity in iframe and proxy environments
+export const db = initializeFirestore(
+  app,
+  {
+    experimentalForceLongPolling: true,
+  },
+  config.firestoreDatabaseId
+);

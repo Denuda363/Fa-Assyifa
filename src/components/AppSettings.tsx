@@ -301,8 +301,8 @@ export default function AppSettings({ transactions, profile, onUpdateProfile, on
 
       {/* Tab: Saldo Bulan Kemarin (Manual Input) */}
       {activeTab === 'balances' && (
-        <div className="max-w-3xl mx-auto space-y-6">
-          <div className="bg-neutral-900/40 backdrop-blur-2xl border border-sky-500/20 shadow-2xl px-4 py-8 sm:rounded-[2rem] sm:p-10 relative overflow-hidden">
+        <div className="max-w-5xl mx-auto space-y-6">
+          <div className="bg-[#0b0f17]/90 backdrop-blur-2xl border border-sky-500/20 shadow-2xl px-5 py-8 sm:rounded-3xl sm:p-10 relative overflow-hidden">
             <div className="absolute top-0 right-0 w-32 h-32 bg-sky-500/10 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none"></div>
             
             <div className="relative z-10 space-y-6">
@@ -784,8 +784,8 @@ export default function AppSettings({ transactions, profile, onUpdateProfile, on
 
       {/* Tab: Backup & Restore */}
       {activeTab === 'backup' && (
-        <div className="max-w-3xl mx-auto space-y-6">
-          <div className="bg-neutral-900/40 backdrop-blur-2xl border border-neutral-800/60 shadow-2xl px-4 py-8 sm:rounded-[2rem] sm:p-10 relative overflow-hidden">
+        <div className="max-w-5xl mx-auto space-y-6">
+          <div className="bg-[#0b0f17]/90 backdrop-blur-2xl border border-neutral-800/80 shadow-2xl px-5 py-8 sm:rounded-3xl sm:p-10 relative overflow-hidden">
             <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/5 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none"></div>
             <div className="md:grid md:grid-cols-3 md:gap-8 relative z-10">
               <div className="md:col-span-1">
