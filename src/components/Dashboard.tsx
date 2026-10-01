@@ -1,18 +1,20 @@
-import { useMemo, useState, useEffect } from 'react';
-import { Transaction, CompanyProfile, formatRupiah, Loan, getLoanRemaining } from '../types';
-import { Download, Calendar, Filter, FileSpreadsheet, X, HandCoins, AlertCircle, Sparkles, ChevronDown } from 'lucide-react';
+import React, { useMemo, useState, useEffect } from 'react';
+import { Transaction, CompanyProfile, formatRupiah, Loan, getLoanRemaining, getStartingBalanceForMonth } from '../types';
+import { Download, Calendar, Filter, FileSpreadsheet, X, HandCoins, AlertCircle, Sparkles, Edit2, Wallet, Check, RotateCcw, Plus } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { exportToPDF, exportToExcel, exportMonthlyReportExcel, exportYearlyReportExcel, MONTH_NAMES_ID } from '../utils/exportUtils';
 import { format, isWithinInterval, startOfDay, endOfDay, parseISO, eachDayOfInterval } from 'date-fns';
 import { motion, AnimatePresence } from 'motion/react';
+import { createPortal } from 'react-dom';
 
 interface DashboardProps {
   transactions: Transaction[];
   profile: CompanyProfile;
   loans?: Loan[];
+  onUpdateProfile?: (data: Partial<CompanyProfile>) => Promise<void>;
 }
 
-export default function Dashboard({ transactions, profile, loans = [] }: DashboardProps) {
+export default function Dashboard({ transactions, profile, loans = [], onUpdateProfile }: DashboardProps) {
   const [filterMode, setFilterMode] = useState<'month' | 'all' | 'custom'>('month');
   
   // Calculate months that have transactions
@@ -44,7 +46,6 @@ export default function Dashboard({ transactions, profile, loans = [] }: Dashboa
     if (!hasUserChangedMonth && availableMonths.length > 0) {
       const currentMonthHasData = availableMonths.some(m => m.monthStr === selectedMonth);
       if (!currentMonthHasData) {
-        // Auto-select latest month with transactions
         setSelectedMonth(availableMonths[0].monthStr);
       }
     }
@@ -58,12 +59,67 @@ export default function Dashboard({ transactions, profile, loans = [] }: Dashboa
     return d.getFullYear();
   });
 
+  // Manual Starting Balance Modal State
+  const [isBalanceModalOpen, setIsBalanceModalOpen] = useState(false);
+  const [balanceInput, setBalanceInput] = useState<string>('');
+  const [isSavingBalance, setIsSavingBalance] = useState(false);
+
   const formatMonthLabel = (mStr: string) => {
     const parts = mStr.split('-');
     if (parts.length < 2) return mStr;
     const y = parts[0];
     const mIdx = parseInt(parts[1], 10) - 1;
     return `${MONTH_NAMES_ID[mIdx] || parts[1]} ${y}`;
+  };
+
+  const startingBalanceInfo = useMemo(() => {
+    return getStartingBalanceForMonth(selectedMonth, profile, transactions);
+  }, [selectedMonth, profile, transactions]);
+
+  const startingBalance = filterMode === 'month' ? startingBalanceInfo.amount : 0;
+
+  const openBalanceModal = () => {
+    setBalanceInput(startingBalanceInfo.amount ? String(startingBalanceInfo.amount) : '');
+    setIsBalanceModalOpen(true);
+  };
+
+  const handleSaveBalance = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!onUpdateProfile) return;
+    try {
+      setIsSavingBalance(true);
+      const num = parseFloat(balanceInput.replace(/[^0-9.-]+/g, '')) || 0;
+      const updated = {
+        ...(profile.previousMonthBalances || {}),
+        [selectedMonth]: num
+      };
+      await onUpdateProfile({ previousMonthBalances: updated });
+      setIsBalanceModalOpen(false);
+    } catch (err) {
+      console.error('Failed to save manual starting balance:', err);
+    } finally {
+      setIsSavingBalance(false);
+    }
+  };
+
+  const handleResetBalance = async () => {
+    if (!onUpdateProfile) return;
+    try {
+      setIsSavingBalance(true);
+      const updated = { ...(profile.previousMonthBalances || {}) };
+      delete updated[selectedMonth];
+      await onUpdateProfile({ previousMonthBalances: updated });
+      setIsBalanceModalOpen(false);
+    } catch (err) {
+      console.error('Failed to reset starting balance:', err);
+    } finally {
+      setIsSavingBalance(false);
+    }
+  };
+
+  const addPresetBalance = (addition: number) => {
+    const current = parseFloat(balanceInput.replace(/[^0-9.-]+/g, '')) || 0;
+    setBalanceInput(String(current + addition));
   };
 
   const { filteredTxs, summary, chartData } = useMemo(() => {
@@ -101,7 +157,6 @@ export default function Dashboard({ transactions, profile, loans = [] }: Dashboa
       });
     } else if (filterMode === 'all') {
       filtered = transactions;
-      // For all time, if data spans 1 month show days, otherwise show monthly bars
       const monthsInAll = availableMonths.map(m => m.monthStr).sort();
       if (monthsInAll.length <= 1 && monthsInAll[0]) {
         const [y, m] = monthsInAll[0].split('-');
@@ -253,15 +308,15 @@ export default function Dashboard({ transactions, profile, loans = [] }: Dashboa
   }, [transactions]);
 
   const handleExportPDF = () => {
-    exportToPDF({ transactions: filteredTxs, profile, monthYear: reportLabel, summary });
+    exportToPDF({ transactions: filteredTxs, profile, monthYear: reportLabel, summary, startingBalance });
   };
 
   const handleExportExcel = () => {
-    exportToExcel({ transactions: filteredTxs, profile, monthYear: reportLabel, summary, loans });
+    exportToExcel({ transactions: filteredTxs, profile, monthYear: reportLabel, summary, loans, startingBalance });
   };
 
   const handleExportMonthlyReport = () => {
-    exportMonthlyReportExcel({ transactions: filteredTxs, profile, monthYear: reportLabel, summary, loans });
+    exportMonthlyReportExcel({ transactions: filteredTxs, profile, monthYear: reportLabel, summary, loans, startingBalance });
   };
 
   const handleExportYearlyReport = (yearToExport: number) => {
@@ -269,9 +324,10 @@ export default function Dashboard({ transactions, profile, loans = [] }: Dashboa
     setShowYearModal(false);
   };
 
-  // Find if currently selected month has 0 transactions while others have data
   const currentMonthCount = availableMonths.find(m => m.monthStr === selectedMonth)?.count || 0;
   const latestMonthWithData = availableMonths[0];
+
+  const totalEndingCash = startingBalance + summary.incomeNeto;
 
   return (
     <div className="space-y-4 sm:space-y-6">
@@ -323,7 +379,6 @@ export default function Dashboard({ transactions, profile, loans = [] }: Dashboa
             {/* Sub-inputs per filter mode */}
             {filterMode === 'month' && (
               <div className="flex items-center gap-2 w-full sm:w-auto">
-                {/* Available Month Dropdown if available */}
                 {availableMonths.length > 0 && (
                   <select
                     value={selectedMonth}
@@ -414,6 +469,50 @@ export default function Dashboard({ transactions, profile, loans = [] }: Dashboa
         </div>
       </div>
 
+      {/* Starting Balance Highlight & Edit Bar (For Month Mode) */}
+      {filterMode === 'month' && (
+        <div className="bg-gradient-to-r from-sky-950/50 via-neutral-900/60 to-neutral-900/60 border border-sky-500/30 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-lg shadow-sky-950/20">
+          <div className="flex items-start sm:items-center gap-3.5">
+            <div className="w-11 h-11 rounded-2xl bg-sky-500/10 border border-sky-500/25 flex items-center justify-center text-sky-400 shrink-0 shadow-sm">
+              <Wallet className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs font-bold text-sky-300 uppercase tracking-wider">
+                  Saldo Bulan Kemarin ({formatMonthLabel(selectedMonth)})
+                </span>
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                  startingBalanceInfo.isManual 
+                    ? 'bg-amber-500/15 text-amber-300 border-amber-500/30' 
+                    : 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                }`}>
+                  {startingBalanceInfo.isManual ? 'Input Manual' : (startingBalance > 0 ? 'Otomatis' : 'Belum Diinput')}
+                </span>
+              </div>
+              <div className="flex items-baseline gap-2 mt-0.5">
+                <span className="text-xl sm:text-2xl font-black text-white font-mono">
+                  {formatRupiah(startingBalance)}
+                </span>
+                <span className="text-xs text-neutral-400">
+                  (Masuk ke hitungan saldo akhir & report closing)
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+            <button
+              type="button"
+              onClick={openBalanceModal}
+              className="inline-flex items-center gap-2 px-4 py-2.5 bg-sky-600 hover:bg-sky-500 text-white rounded-xl text-xs sm:text-sm font-bold shadow-md shadow-sky-600/20 transition-all cursor-pointer"
+            >
+              <Edit2 className="w-4 h-4" />
+              <span>Input Saldo Manual</span>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Helpful Alert if currently selected month has 0 transactions but other months have data */}
       {filterMode === 'month' && currentMonthCount === 0 && latestMonthWithData && (
         <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -488,87 +587,138 @@ export default function Dashboard({ transactions, profile, loans = [] }: Dashboa
           </div>
         </div>
 
-        {/* Middle: 3 Breakdown Cards */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-6">
+        {/* 4 Cards Grid: Saldo Kemarin, Pemasukan, Pengeluaran Cash, Pengeluaran TF */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">
+          {/* Card 1: Saldo Bulan Kemarin */}
+          <div className="bg-neutral-900/30 backdrop-blur-xl border border-sky-500/20 rounded-xl sm:rounded-[2rem] p-4 sm:p-6 shadow-sm sm:shadow-xl relative overflow-hidden flex flex-col justify-between">
+             <div>
+               <div className="flex items-center justify-between mb-1 sm:mb-3">
+                 <h3 className="text-[10px] sm:text-xs font-bold text-sky-400 uppercase tracking-widest">Saldo Bulan Kemarin</h3>
+                 <button
+                   onClick={openBalanceModal}
+                   className="text-neutral-400 hover:text-sky-300 p-1 rounded-lg hover:bg-neutral-800 transition-colors"
+                   title="Input saldo kemarin secara manual"
+                 >
+                   <Edit2 className="w-3.5 h-3.5" />
+                 </button>
+               </div>
+               <div className="text-lg sm:text-2xl font-black text-sky-300 mb-1">{formatRupiah(startingBalance)}</div>
+             </div>
+             <div className="text-xs text-neutral-400 pt-2 border-t border-neutral-800/40 flex items-center justify-between">
+               <span>Status Saldo:</span>
+               <span className="font-semibold text-neutral-200">
+                 {startingBalanceInfo.isManual ? 'Manual' : (startingBalance > 0 ? 'Otomatis' : 'Rp 0')}
+               </span>
+             </div>
+          </div>
+
+          {/* Card 2: Pemasukan Kotor */}
           <div className="bg-neutral-900/30 backdrop-blur-xl border border-neutral-800/50 rounded-xl sm:rounded-[2rem] p-4 sm:p-6 shadow-sm sm:shadow-xl relative overflow-hidden">
-             <h3 className="text-[10px] sm:text-sm font-bold text-neutral-500 uppercase tracking-widest mb-1 sm:mb-4">Pemasukan Kotor</h3>
-             <div className="text-xl sm:text-3xl font-extrabold text-emerald-400 mb-2 sm:mb-4">{formatRupiah(summary.incomeBruto)}</div>
+             <h3 className="text-[10px] sm:text-xs font-bold text-neutral-500 uppercase tracking-widest mb-1 sm:mb-3">Pemasukan Kotor</h3>
+             <div className="text-lg sm:text-2xl font-black text-emerald-400 mb-1">{formatRupiah(summary.incomeBruto)}</div>
              {summary.incomeBreakdown.length > 0 ? (
-                <ul className="text-xs sm:text-sm text-neutral-400">
-                  {summary.incomeBreakdown.map((item, idx) => (
-                    <li key={idx} className="flex justify-between items-center py-1 sm:py-2 border-b border-neutral-800/30 last:border-0">
-                      <span className="capitalize text-neutral-400 font-medium">{item.name}</span>
+                <ul className="text-xs text-neutral-400 pt-2 border-t border-neutral-800/40 space-y-1">
+                  {summary.incomeBreakdown.slice(0, 3).map((item, idx) => (
+                    <li key={idx} className="flex justify-between items-center">
+                      <span className="capitalize text-neutral-400 font-medium truncate mr-2">{item.name}</span>
                       <span className="font-semibold text-neutral-200">{formatRupiah(item.amount)}</span>
                     </li>
                   ))}
                 </ul>
               ) : (
-                <div className="text-xs sm:text-sm text-neutral-500 py-1">Tidak ada pemasukan tercatat</div>
+                <div className="text-xs text-neutral-500 pt-2 border-t border-neutral-800/40">Tidak ada pemasukan</div>
               )}
           </div>
 
+          {/* Card 3: Pengeluaran Cash */}
           <div className="bg-neutral-900/30 backdrop-blur-xl border border-neutral-800/50 rounded-xl sm:rounded-[2rem] p-4 sm:p-6 shadow-sm sm:shadow-xl relative overflow-hidden">
-             <div className="flex justify-between items-center mb-1 sm:mb-4">
-               <h3 className="text-[10px] sm:text-sm font-bold text-neutral-500 uppercase tracking-widest">Pengel. Cash (Tunai)</h3>
-             </div>
-             <div className="text-xl sm:text-3xl font-extrabold text-rose-400 mb-2 sm:mb-4">{formatRupiah(summary.pengeluaranCashTotal)}</div>
+             <h3 className="text-[10px] sm:text-xs font-bold text-neutral-500 uppercase tracking-widest mb-1 sm:mb-3">Pengel. Cash (Tunai)</h3>
+             <div className="text-lg sm:text-2xl font-black text-rose-400 mb-1">{formatRupiah(summary.pengeluaranCashTotal)}</div>
              {summary.pengeluaranCashBreakdown.length > 0 ? (
-                <ul className="text-xs sm:text-sm text-neutral-400 max-h-48 overflow-y-auto pr-1 scrollbar-none">
-                  {summary.pengeluaranCashBreakdown.map((item, idx) => (
-                    <li key={idx} className="flex justify-between items-center py-1 sm:py-2 border-b border-neutral-800/30 last:border-0">
+                <ul className="text-xs text-neutral-400 pt-2 border-t border-neutral-800/40 space-y-1 max-h-24 overflow-y-auto pr-1 scrollbar-none">
+                  {summary.pengeluaranCashBreakdown.slice(0, 3).map((item, idx) => (
+                    <li key={idx} className="flex justify-between items-center">
                       <span className="capitalize text-neutral-400 font-medium truncate mr-2">{item.name}</span>
                       <span className="font-semibold text-neutral-200 whitespace-nowrap">{formatRupiah(item.amount)}</span>
                     </li>
                   ))}
                 </ul>
               ) : (
-                <div className="text-xs sm:text-sm text-neutral-500 py-1">Tidak ada pengeluaran tunai</div>
+                <div className="text-xs text-neutral-500 pt-2 border-t border-neutral-800/40">Tidak ada pengeluaran tunai</div>
               )}
           </div>
 
+          {/* Card 4: Pengeluaran Transfer */}
           <div className="bg-neutral-900/30 backdrop-blur-xl border border-neutral-800/50 rounded-xl sm:rounded-[2rem] p-4 sm:p-6 shadow-sm sm:shadow-xl relative overflow-hidden">
-             <div className="flex justify-between items-center mb-1 sm:mb-4">
-               <h3 className="text-[10px] sm:text-sm font-bold text-neutral-500 uppercase tracking-widest">Pengel. Transfer (Bank)</h3>
-             </div>
-             <div className="text-xl sm:text-3xl font-extrabold text-rose-400 mb-2 sm:mb-4">{formatRupiah(summary.pengeluaranTfTotal)}</div>
+             <h3 className="text-[10px] sm:text-xs font-bold text-neutral-500 uppercase tracking-widest mb-1 sm:mb-3">Pengel. Transfer (Bank)</h3>
+             <div className="text-lg sm:text-2xl font-black text-rose-400 mb-1">{formatRupiah(summary.pengeluaranTfTotal)}</div>
              {summary.pengeluaranTfBreakdown.length > 0 ? (
-                <ul className="text-xs sm:text-sm text-neutral-400 max-h-48 overflow-y-auto pr-1 scrollbar-none">
-                  {summary.pengeluaranTfBreakdown.map((item, idx) => (
-                    <li key={idx} className="flex justify-between items-center py-1 sm:py-2 border-b border-neutral-800/30 last:border-0">
+                <ul className="text-xs text-neutral-400 pt-2 border-t border-neutral-800/40 space-y-1 max-h-24 overflow-y-auto pr-1 scrollbar-none">
+                  {summary.pengeluaranTfBreakdown.slice(0, 3).map((item, idx) => (
+                    <li key={idx} className="flex justify-between items-center">
                       <span className="capitalize text-neutral-400 font-medium truncate mr-2">{item.name}</span>
                       <span className="font-semibold text-neutral-200 whitespace-nowrap">{formatRupiah(item.amount)}</span>
                     </li>
                   ))}
                 </ul>
               ) : (
-                <div className="text-xs sm:text-sm text-neutral-500 py-1">Tidak ada pengeluaran transfer</div>
+                <div className="text-xs text-neutral-500 pt-2 border-t border-neutral-800/40">Tidak ada pengeluaran transfer</div>
               )}
           </div>
         </div>
 
-        {/* Hero Card Income Neto at Bottom */}
-        <div className="bg-gradient-to-br from-indigo-500/10 via-neutral-900/40 to-neutral-900/40 backdrop-blur-xl border border-indigo-500/20 rounded-xl sm:rounded-[2rem] p-4 sm:p-8 shadow-sm sm:shadow-xl relative overflow-hidden flex-1 flex flex-col justify-center">
-          <div className="absolute top-0 right-0 w-32 sm:w-48 h-32 sm:h-48 bg-indigo-500/20 rounded-full blur-2xl sm:blur-3xl -mr-10 -mt-10 pointer-events-none"></div>
+        {/* Hero Card: Total Saldo Akhir Kas Kumulatif (Saldo Kemarin + Laba Bersih) */}
+        <div className="bg-gradient-to-br from-indigo-950/60 via-neutral-900/80 to-neutral-900/80 backdrop-blur-xl border border-indigo-500/30 rounded-xl sm:rounded-[2rem] p-4 sm:p-8 shadow-xl relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-32 sm:w-64 h-32 sm:h-64 bg-indigo-500/15 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none"></div>
           
-          <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-4 sm:gap-6">
-            <div>
-              <h3 className="text-[10px] sm:text-sm font-bold text-indigo-300 uppercase tracking-widest mb-1 sm:mb-2">Total Income Neto</h3>
-              <div className="text-2xl sm:text-4xl xl:text-5xl font-extrabold text-white tracking-tight break-words">
-                {formatRupiah(summary.incomeNeto)}
+          <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 uppercase tracking-wider">
+                  Total Kas & Bank Akumulatif
+                </span>
+                <span className="text-xs text-neutral-400">Tercantum pada Laporan Excel & PDF</span>
               </div>
-              <p className="text-xs text-neutral-400 mt-1">
-                Pemasukan Kotor dikurangi Seluruh Pengeluaran Tunai & Transfer
-              </p>
+              <h3 className="text-xs sm:text-sm font-bold text-neutral-300 uppercase tracking-widest">
+                Total Saldo Akhir Kas Berjalan
+              </h3>
+              <div className="text-2xl sm:text-4xl xl:text-5xl font-black text-white tracking-tight break-words font-mono">
+                {formatRupiah(totalEndingCash)}
+              </div>
+              <div className="p-2.5 rounded-xl bg-neutral-950/60 border border-neutral-800/80 inline-flex flex-wrap items-center gap-2 text-xs text-neutral-300">
+                <span>Rincian:</span>
+                <span className="text-sky-400 font-semibold font-mono">Saldo Kemarin: {formatRupiah(startingBalance)}</span>
+                <span className="text-neutral-500">+</span>
+                <span className="text-emerald-400 font-semibold font-mono">Neto Bulan Ini: {formatRupiah(summary.incomeNeto)}</span>
+                <span className="text-neutral-500">=</span>
+                <span className="text-white font-bold font-mono">{formatRupiah(totalEndingCash)}</span>
+              </div>
             </div>
             
-            <div className="flex flex-row sm:flex-col gap-4 sm:gap-4 md:gap-8 pt-3 sm:pt-0 border-t sm:border-t-0 md:pl-8 md:border-l border-indigo-500/20">
-              <div className="flex-1">
-                <span className="block text-[9px] sm:text-sm font-bold text-indigo-200/70 uppercase tracking-widest mb-0.5 sm:mb-1">Profit Perusahaan (15%)</span>
-                <span className="text-sm sm:text-xl md:text-2xl font-bold text-indigo-100">{formatRupiah(summary.profitPerusahaan)}</span>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 pt-4 lg:pt-0 border-t lg:border-t-0 lg:pl-8 lg:border-l border-neutral-800">
+              <div>
+                <span className="block text-[10px] sm:text-xs font-bold text-neutral-400 uppercase tracking-wider mb-1">
+                  Income Neto (Bulan Ini)
+                </span>
+                <span className="text-base sm:text-xl font-bold text-emerald-400 font-mono">
+                  {formatRupiah(summary.incomeNeto)}
+                </span>
               </div>
-              <div className="flex-1 border-l border-indigo-500/20 pl-4 sm:border-0 sm:pl-0">
-                <span className="block text-[9px] sm:text-sm font-bold text-amber-200/70 uppercase tracking-widest mb-0.5 sm:mb-1">Profit Owner (20%)</span>
-                <span className="text-sm sm:text-xl md:text-2xl font-bold text-amber-400">{formatRupiah(summary.profitOwner)}</span>
+              <div>
+                <span className="block text-[10px] sm:text-xs font-bold text-indigo-300 uppercase tracking-wider mb-1">
+                  Profit Perusahaan (15%)
+                </span>
+                <span className="text-base sm:text-xl font-bold text-indigo-200 font-mono">
+                  {formatRupiah(summary.profitPerusahaan)}
+                </span>
+              </div>
+              <div>
+                <span className="block text-[10px] sm:text-xs font-bold text-amber-300 uppercase tracking-wider mb-1">
+                  Profit Owner (20%)
+                </span>
+                <span className="text-base sm:text-xl font-bold text-amber-400 font-mono">
+                  {formatRupiah(summary.profitOwner)}
+                </span>
               </div>
             </div>
           </div>
@@ -622,6 +772,129 @@ export default function Dashboard({ transactions, profile, loans = [] }: Dashboa
           </div>
         )}
       </div>
+
+      {/* Manual Starting Balance Modal */}
+      {isBalanceModalOpen && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-sm">
+          <div 
+            className="fixed inset-0" 
+            onClick={() => setIsBalanceModalOpen(false)} 
+          />
+          <div className="relative bg-neutral-900 border border-neutral-800 rounded-t-[2rem] sm:rounded-3xl max-w-lg w-full p-5 sm:p-7 shadow-2xl space-y-5 z-10 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-3 border-b border-neutral-800">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-sky-500/10 border border-sky-500/25 rounded-xl text-sky-400">
+                  <Wallet className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base sm:text-lg font-bold text-white">Input Saldo Bulan Kemarin</h3>
+                  <p className="text-xs text-neutral-400">Periode {formatMonthLabel(selectedMonth)}</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsBalanceModalOpen(false)}
+                className="p-1.5 text-neutral-400 hover:text-white rounded-lg hover:bg-neutral-800 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveBalance} className="space-y-4">
+              <div className="bg-sky-500/10 border border-sky-500/20 rounded-xl p-3.5 text-xs text-sky-200/90 leading-relaxed">
+                Total saldo sisa kas fisik & rekening bank dari akhir bulan sebelumnya yang dibawa masuk sebagai saldo awal bulan <strong>{formatMonthLabel(selectedMonth)}</strong>. Saldo ini akan otomatis masuk ke perhitungan closing bulanan dan laporan Excel/PDF.
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-neutral-300 uppercase tracking-wider mb-2">
+                  Nominal Saldo Kemarin (Rp)
+                </label>
+                <div className="relative">
+                  <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center text-sm font-bold text-neutral-400">
+                    Rp
+                  </span>
+                  <input
+                    type="number"
+                    value={balanceInput}
+                    onChange={(e) => setBalanceInput(e.target.value)}
+                    placeholder="Contoh: 15000000"
+                    className="w-full pl-12 pr-4 py-3 bg-neutral-950/70 border border-neutral-800 focus:border-sky-500 rounded-xl text-base sm:text-lg font-bold text-white outline-none focus:ring-2 focus:ring-sky-500/20 font-mono"
+                    autoFocus
+                  />
+                </div>
+                {balanceInput && (
+                  <p className="text-xs text-neutral-400 mt-1.5 font-mono">
+                    Terbaca: <strong className="text-sky-300">{formatRupiah(parseFloat(balanceInput) || 0)}</strong>
+                  </p>
+                )}
+              </div>
+
+              {/* Quick Nominal Chips */}
+              <div>
+                <label className="block text-[11px] font-semibold text-neutral-400 uppercase tracking-wider mb-1.5">
+                  Tambah Cepat Nominal
+                </label>
+                <div className="flex flex-wrap gap-1.5">
+                  {[1000000, 5000000, 10000000, 25000000, 50000000].map(amt => (
+                    <button
+                      key={amt}
+                      type="button"
+                      onClick={() => addPresetBalance(amt)}
+                      className="px-2.5 py-1.5 bg-neutral-950 border border-neutral-800 hover:border-sky-500/50 hover:bg-neutral-800 rounded-lg text-xs font-semibold text-neutral-300 transition-colors cursor-pointer"
+                    >
+                      +{amt >= 1000000 ? `${amt / 1000000}jt` : `${amt / 1000}rb`}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => setBalanceInput('')}
+                    className="px-2.5 py-1.5 bg-neutral-950 border border-neutral-800 hover:border-rose-500/50 text-rose-400 rounded-lg text-xs font-semibold transition-colors cursor-pointer"
+                  >
+                    Reset (0)
+                  </button>
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-neutral-800">
+                {startingBalanceInfo.isManual ? (
+                  <button
+                    type="button"
+                    onClick={handleResetBalance}
+                    disabled={isSavingBalance}
+                    className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium text-rose-400 hover:bg-rose-500/10 rounded-xl transition-colors cursor-pointer"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>Kembalikan ke Hitungan Otomatis</span>
+                  </button>
+                ) : (
+                  <div />
+                )}
+
+                <div className="flex items-center gap-2 w-full sm:w-auto">
+                  <button
+                    type="button"
+                    onClick={() => setIsBalanceModalOpen(false)}
+                    disabled={isSavingBalance}
+                    className="flex-1 sm:flex-none px-4 py-2.5 text-xs sm:text-sm font-medium text-neutral-400 hover:text-white rounded-xl hover:bg-neutral-800 transition-colors cursor-pointer"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSavingBalance}
+                    className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-5 py-2.5 text-xs sm:text-sm font-bold text-white bg-sky-600 hover:bg-sky-500 rounded-xl shadow-lg shadow-sky-600/25 transition-all cursor-pointer disabled:opacity-50"
+                  >
+                    <Check className="w-4 h-4" />
+                    <span>{isSavingBalance ? 'Menyimpan...' : 'Simpan Saldo'}</span>
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>,
+        document.body
+      )}
 
       {/* Annual Report Export Modal */}
       <AnimatePresence>

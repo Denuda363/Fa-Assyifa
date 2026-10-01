@@ -50,7 +50,7 @@ export default function App() {
   const renderContent = () => {
     switch (activeTab) {
       case 'dashboard':
-        return <Dashboard transactions={transactions} profile={profile} loans={loans} />;
+        return <Dashboard transactions={transactions} profile={profile} loans={loans} onUpdateProfile={updateProfile} />;
       case 'transactions':
         return <Transactions 
           transactions={transactions} 
@@ -73,7 +73,7 @@ export default function App() {
       case 'settings':
         return <AppSettings transactions={transactions} profile={profile} onUpdateProfile={updateProfile} onRestore={async () => {}} />;
       default:
-        return <Dashboard transactions={transactions} profile={profile} loans={loans} />;
+        return <Dashboard transactions={transactions} profile={profile} loans={loans} onUpdateProfile={updateProfile} />;
     }
   };
 

@@ -1,9 +1,10 @@
 import React, { useState, useRef } from 'react';
-import { Transaction, CompanyProfile, DEFAULT_PROFILE } from '../types';
-import { Download, Upload, AlertTriangle, Plus, X, Tag, Edit2, Check, BookOpen, Layers, ShieldCheck } from 'lucide-react';
+import { Transaction, CompanyProfile, DEFAULT_PROFILE, formatRupiah } from '../types';
+import { Download, Upload, AlertTriangle, Plus, X, Tag, Edit2, Check, BookOpen, Wallet, Trash2, RotateCcw } from 'lucide-react';
 import { db } from '../firebase';
 import { collection, writeBatch, doc } from 'firebase/firestore';
 import UserGuide from './UserGuide';
+import { MONTH_NAMES_ID } from '../utils/exportUtils';
 
 interface AppSettingsProps {
   transactions: Transaction[];
@@ -13,7 +14,7 @@ interface AppSettingsProps {
 }
 
 export default function AppSettings({ transactions, profile, onUpdateProfile, onRestore }: AppSettingsProps) {
-  const [activeTab, setActiveTab] = useState<'guide' | 'categories' | 'backup'>('guide');
+  const [activeTab, setActiveTab] = useState<'guide' | 'categories' | 'balances' | 'backup'>('guide');
   const [isRestoring, setIsRestoring] = useState(false);
   const [message, setMessage] = useState('');
   const [newCategory, setNewCategory] = useState('');
@@ -28,11 +29,20 @@ export default function AppSettings({ transactions, profile, onUpdateProfile, on
   const [editingTfCategory, setEditingTfCategory] = useState<string | null>(null);
   const [editTfCategoryValue, setEditTfCategoryValue] = useState('');
 
+  // Saldo Bulan Kemarin State
+  const [balanceMonth, setBalanceMonth] = useState(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  });
+  const [balanceAmount, setBalanceAmount] = useState<string>('');
+  const [balanceMessage, setBalanceMessage] = useState('');
+
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const customCategories = profile.customOutcomeCategories || DEFAULT_PROFILE.customOutcomeCategories || [];
   const customIncomeCategories = profile.customIncomeCategories || DEFAULT_PROFILE.customIncomeCategories || [];
   const customOutcomeTfCategories = profile.customOutcomeTfCategories || DEFAULT_PROFILE.customOutcomeTfCategories || [];
+  const previousMonthBalances = profile.previousMonthBalances || {};
 
   const handleAddCategory = async () => {
     if (!newCategory.trim()) return;
@@ -130,6 +140,36 @@ export default function AppSettings({ transactions, profile, onUpdateProfile, on
     setEditingTfCategory(null);
   };
 
+  // Saldo Bulan Kemarin Handlers
+  const handleSaveManualBalance = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!balanceMonth) return;
+    const num = parseFloat(balanceAmount.replace(/[^0-9.-]+/g, '')) || 0;
+    const updated = {
+      ...previousMonthBalances,
+      [balanceMonth]: num
+    };
+    await onUpdateProfile({ previousMonthBalances: updated });
+    setBalanceMessage(`Saldo bulan kemarin untuk periode ${formatMonthStr(balanceMonth)} berhasil disimpan: ${formatRupiah(num)}`);
+    setTimeout(() => setBalanceMessage(''), 4000);
+  };
+
+  const handleDeleteManualBalance = async (mKey: string) => {
+    const updated = { ...previousMonthBalances };
+    delete updated[mKey];
+    await onUpdateProfile({ previousMonthBalances: updated });
+    setBalanceMessage(`Pengaturan saldo manual untuk ${formatMonthStr(mKey)} telah dihapus.`);
+    setTimeout(() => setBalanceMessage(''), 4000);
+  };
+
+  const formatMonthStr = (mStr: string) => {
+    const parts = mStr.split('-');
+    if (parts.length < 2) return mStr;
+    const y = parts[0];
+    const mIdx = parseInt(parts[1], 10) - 1;
+    return `${MONTH_NAMES_ID[mIdx] || parts[1]} ${y}`;
+  };
+
   const handleBackup = () => {
     const dataStr = JSON.stringify(transactions, null, 2);
     const dataBlob = new Blob([dataStr], { type: 'application/json' });
@@ -188,6 +228,7 @@ export default function AppSettings({ transactions, profile, onUpdateProfile, on
   };
 
   const totalCustomCats = customCategories.length + customOutcomeTfCategories.length + customIncomeCategories.length;
+  const totalManualBalances = Object.keys(previousMonthBalances).length;
 
   return (
     <div className="space-y-6">
@@ -195,50 +236,236 @@ export default function AppSettings({ transactions, profile, onUpdateProfile, on
       <div className="bg-neutral-900/60 backdrop-blur-2xl border border-neutral-800/80 rounded-2xl sm:rounded-3xl p-2 sm:p-2.5 shadow-xl flex items-center justify-between gap-1 overflow-x-auto scrollbar-none no-print">
         <button
           onClick={() => setActiveTab('guide')}
-          className={`flex items-center justify-center gap-2.5 px-4 sm:px-6 py-3 rounded-xl sm:rounded-2xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap flex-1 ${
+          className={`flex items-center justify-center gap-2 px-3 sm:px-5 py-3 rounded-xl sm:rounded-2xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap flex-1 ${
             activeTab === 'guide'
               ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30'
               : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/50'
           }`}
         >
-          <BookOpen className="w-4 h-4 sm:w-5 sm:h-5 text-indigo-300" />
-          <span>Panduan Penggunaan</span>
-          <span className="hidden sm:inline-block px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-indigo-500/25 text-indigo-200 border border-indigo-500/30">
-            9 Bab SOP
+          <BookOpen className="w-4 h-4 text-indigo-300" />
+          <span>Panduan</span>
+          <span className="hidden sm:inline-block px-1.5 py-0.5 rounded-full text-[10px] font-extrabold bg-indigo-500/25 text-indigo-200 border border-indigo-500/30">
+            9 Bab
           </span>
         </button>
 
         <button
+          onClick={() => setActiveTab('balances')}
+          className={`flex items-center justify-center gap-2 px-3 sm:px-5 py-3 rounded-xl sm:rounded-2xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap flex-1 ${
+            activeTab === 'balances'
+              ? 'bg-sky-600 text-white shadow-lg shadow-sky-600/30'
+              : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/50'
+          }`}
+        >
+          <Wallet className="w-4 h-4 text-sky-400" />
+          <span>Saldo Kemarin</span>
+          {totalManualBalances > 0 && (
+            <span className="hidden sm:inline-block px-1.5 py-0.5 rounded-full text-[10px] font-extrabold bg-neutral-800 text-sky-300 border border-neutral-700">
+              {totalManualBalances}
+            </span>
+          )}
+        </button>
+
+        <button
           onClick={() => setActiveTab('categories')}
-          className={`flex items-center justify-center gap-2.5 px-4 sm:px-6 py-3 rounded-xl sm:rounded-2xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap flex-1 ${
+          className={`flex items-center justify-center gap-2 px-3 sm:px-5 py-3 rounded-xl sm:rounded-2xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap flex-1 ${
             activeTab === 'categories'
               ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30'
               : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/50'
           }`}
         >
-          <Tag className="w-4 h-4 sm:w-5 sm:h-5 text-sky-400" />
+          <Tag className="w-4 h-4 text-emerald-400" />
           <span>Kategori Kas</span>
-          <span className="hidden sm:inline-block px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-neutral-800 text-neutral-300 border border-neutral-700">
+          <span className="hidden sm:inline-block px-1.5 py-0.5 rounded-full text-[10px] font-extrabold bg-neutral-800 text-neutral-300 border border-neutral-700">
             {totalCustomCats}
           </span>
         </button>
 
         <button
           onClick={() => setActiveTab('backup')}
-          className={`flex items-center justify-center gap-2.5 px-4 sm:px-6 py-3 rounded-xl sm:rounded-2xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap flex-1 ${
+          className={`flex items-center justify-center gap-2 px-3 sm:px-5 py-3 rounded-xl sm:rounded-2xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap flex-1 ${
             activeTab === 'backup'
               ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30'
               : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/50'
           }`}
         >
-          <Download className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-400" />
-          <span>Backup & Restore</span>
+          <Download className="w-4 h-4 text-amber-400" />
+          <span>Backup</span>
         </button>
       </div>
 
       {/* Tab: Panduan Penggunaan Lengkap */}
       {activeTab === 'guide' && (
         <UserGuide />
+      )}
+
+      {/* Tab: Saldo Bulan Kemarin (Manual Input) */}
+      {activeTab === 'balances' && (
+        <div className="max-w-3xl mx-auto space-y-6">
+          <div className="bg-neutral-900/40 backdrop-blur-2xl border border-sky-500/20 shadow-2xl px-4 py-8 sm:rounded-[2rem] sm:p-10 relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-sky-500/10 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none"></div>
+            
+            <div className="relative z-10 space-y-6">
+              <div>
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 bg-sky-500/10 border border-sky-500/20 rounded-xl text-sky-400">
+                    <Wallet className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold leading-6 text-white tracking-tight">
+                      Input Saldo Bulan Kemarin (Saldo Awal)
+                    </h3>
+                    <p className="mt-1 text-sm text-neutral-400 leading-relaxed">
+                      Atur total saldo kas/bank sisa akhir bulan lalu secara manual untuk setiap bulan. Saldo ini akan masuk ke kartu Total Saldo Kas Berjalan di Dashboard dan tercantum pada baris ke-4 Closing Monthly Excel serta PDF.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {balanceMessage && (
+                <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs sm:text-sm font-medium">
+                  {balanceMessage}
+                </div>
+              )}
+
+              <form onSubmit={handleSaveManualBalance} className="bg-neutral-950/60 border border-neutral-800/80 rounded-2xl p-5 space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-neutral-300 uppercase tracking-wider mb-2">
+                      Pilih Bulan Periode
+                    </label>
+                    <input
+                      type="month"
+                      value={balanceMonth}
+                      onChange={(e) => {
+                        setBalanceMonth(e.target.value);
+                        if (previousMonthBalances[e.target.value] !== undefined) {
+                          setBalanceAmount(String(previousMonthBalances[e.target.value]));
+                        } else {
+                          setBalanceAmount('');
+                        }
+                      }}
+                      className="w-full px-3.5 py-2.5 bg-neutral-900 border border-neutral-800 rounded-xl text-white text-sm focus:border-sky-500 outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-neutral-300 uppercase tracking-wider mb-2">
+                      Nominal Saldo Kemarin (Rp)
+                    </label>
+                    <div className="relative">
+                      <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-xs font-bold text-neutral-400">
+                        Rp
+                      </span>
+                      <input
+                        type="number"
+                        value={balanceAmount}
+                        onChange={(e) => setBalanceAmount(e.target.value)}
+                        placeholder="Contoh: 15000000"
+                        className="w-full pl-10 pr-3.5 py-2.5 bg-neutral-900 border border-neutral-800 rounded-xl text-white text-sm font-bold focus:border-sky-500 outline-none font-mono"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {balanceAmount && (
+                  <p className="text-xs text-neutral-400 font-mono">
+                    Nominal: <strong className="text-sky-300">{formatRupiah(parseFloat(balanceAmount) || 0)}</strong>
+                  </p>
+                )}
+
+                {/* Quick Presets */}
+                <div>
+                  <span className="block text-[11px] font-semibold text-neutral-400 uppercase tracking-wider mb-1.5">
+                    Tambah Cepat
+                  </span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {[1000000, 5000000, 10000000, 25000000, 50000000].map(amt => (
+                      <button
+                        key={amt}
+                        type="button"
+                        onClick={() => {
+                          const cur = parseFloat(balanceAmount.replace(/[^0-9.-]+/g, '')) || 0;
+                          setBalanceAmount(String(cur + amt));
+                        }}
+                        className="px-2.5 py-1 bg-neutral-900 border border-neutral-800 hover:border-sky-500/50 hover:bg-neutral-800 text-neutral-300 rounded-lg text-xs font-medium cursor-pointer"
+                      >
+                        +{amt >= 1000000 ? `${amt / 1000000}jt` : `${amt / 1000}rb`}
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => setBalanceAmount('')}
+                      className="px-2.5 py-1 bg-neutral-900 border border-neutral-800 hover:border-rose-500/50 text-rose-400 rounded-lg text-xs font-medium cursor-pointer"
+                    >
+                      Reset (0)
+                    </button>
+                  </div>
+                </div>
+
+                <div className="pt-2 flex justify-end">
+                  <button
+                    type="submit"
+                    className="inline-flex items-center gap-2 px-5 py-2.5 bg-sky-600 hover:bg-sky-500 text-white rounded-xl text-xs sm:text-sm font-bold shadow-md shadow-sky-600/20 transition-all cursor-pointer"
+                  >
+                    <Check className="w-4 h-4" />
+                    <span>Simpan Saldo Bulan Kemarin</span>
+                  </button>
+                </div>
+              </form>
+
+              {/* Table of Configured Manual Balances */}
+              <div className="space-y-3 pt-2">
+                <h4 className="text-sm font-bold text-white tracking-tight">
+                  Daftar Saldo Bulan Kemarin yang Tersimpan
+                </h4>
+
+                {Object.keys(previousMonthBalances).length === 0 ? (
+                  <div className="p-4 rounded-xl bg-neutral-950/40 border border-neutral-800 text-xs text-neutral-500 italic text-center">
+                    Belum ada saldo manual yang diatur. Sistem akan menghitung otomatis dari mutasi transaksi bulan sebelumnya jika tersedia.
+                  </div>
+                ) : (
+                  <div className="divide-y divide-neutral-800/60 rounded-xl border border-neutral-800 overflow-hidden bg-neutral-950/40">
+                    {Object.entries(previousMonthBalances)
+                      .sort((a, b) => b[0].localeCompare(a[0]))
+                      .map(([mKey, amount]) => (
+                        <div key={mKey} className="p-3.5 flex items-center justify-between gap-4 text-xs sm:text-sm">
+                          <div>
+                            <span className="font-bold text-white">{formatMonthStr(mKey)}</span>
+                            <span className="text-neutral-500 ml-2 font-mono text-xs">({mKey})</span>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <span className="font-mono font-bold text-sky-300">
+                              {formatRupiah(amount)}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setBalanceMonth(mKey);
+                                setBalanceAmount(String(amount));
+                              }}
+                              className="p-1 text-neutral-400 hover:text-sky-300 transition-colors"
+                              title="Edit Saldo"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteManualBalance(mKey)}
+                              className="p-1 text-neutral-400 hover:text-rose-400 transition-colors"
+                              title="Hapus Saldo Manual"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Tab: Kategori Kas */}

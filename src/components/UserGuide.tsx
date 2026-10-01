@@ -160,7 +160,12 @@ export default function UserGuide() {
       steps: [
         {
           title: 'Memahami Kartu Ringkasan (KPIs)',
-          desc: '• Pemasukan Bruto: Total seluruh omzet penjualan (Cash + TF BJB + TF BRI).\n• Pengeluaran Tunai: Total biaya yang dibayar menggunakan uang cash di laci kasir.\n• Pengeluaran Transfer: Total biaya yang dibayar melalui transfer rekening bank.\n• Laba Bersih: (Pemasukan Bruto - Total Pengeluaran Tunai - Total Pengeluaran Transfer).\n• Sisa Saldo Kas (Tunai): Estimasi posisi uang fisik di laci kasir (Pemasukan Cash - Pengeluaran Cash).\n• Sisa Saldo Bank: Estimasi posisi saldo rekening (Pemasukan TF - Pengeluaran TF).'
+          desc: '• Saldo Bulan Kemarin (Saldo Awal): Saldo kas fisik & rekening bank sisa bulan lalu (dapat diinput manual).\n• Pemasukan Bruto: Total seluruh omzet penjualan (Cash + TF BJB + TF BRI).\n• Pengeluaran Tunai: Total biaya yang dibayar menggunakan uang cash di laci kasir.\n• Pengeluaran Transfer: Total biaya yang dibayar melalui transfer rekening bank.\n• Laba Bersih Bulan Ini: (Pemasukan Bruto - Total Pengeluaran Tunai - Total Pengeluaran Transfer).\n• Total Saldo Akhir Kas Kumulatif: (Saldo Bulan Kemarin + Laba Bersih Bulan Ini).'
+        },
+        {
+          title: 'Fitur Input Saldo Bulan Kemarin Secara Manual',
+          desc: '1. Pada kartu "Saldo Bulan Kemarin" di Dashboard, klik tombol "Input Saldo Manual".\n2. Anda juga dapat mengaturnya di menu "Pengaturan" -> tab "Saldo Kemarin".\n3. Masukkan total saldo akhir bulan lalu (tersedia tombol cepat +1jt, +5jt, +10jt, dll).\n4. Klik "Simpan Saldo". Saldo ini otomatis masuk ke perhitungan saldo kas berjalan dan langsung tercantum di Laporan Excel Closing & PDF.',
+          tip: 'Jika tidak diisi manual, sistem akan otomatis menghitung dari mutasi kas bulan sebelumnya bila ada riwayat transaksi.'
         },
         {
           title: 'Kartu Ringkasan Pinjaman & Piutang',
@@ -171,8 +176,8 @@ export default function UserGuide() {
           desc: 'Grafik batang interaktif yang memvisualisasikan pemasukan (warna emerald) vs pengeluaran (warna rose) per tanggal dalam bulan/rentang waktu terpilih.'
         },
         {
-          title: 'Filter Periode: Bulanan vs Rentang Kustom',
-          desc: '• Mode Bulanan: Memilih bulan dan tahun tertentu (misal: September 2026).\n• Mode Rentang Tanggal (Custom): Memilih rentang tanggal spesifik (misal dari tanggal 1 s/d 15) untuk laporan paruh bulan.'
+          title: 'Filter Periode: Bulanan, Semua Waktu, & Spesifik',
+          desc: '• Mode Bulanan: Memilih bulan dan tahun tertentu (misal: September 2026).\n• Mode Semua Waktu: Menampilkan total seluruh transaksi sejak awal operasional.\n• Mode Spesifik: Memilih rentang tanggal spesifik (misal dari tanggal 1 s/d 15).'
         }
       ]
     },
@@ -187,24 +192,23 @@ export default function UserGuide() {
       steps: [
         {
           title: 'Ekspor Excel Rekap Bulanan Terstruktur (SOP Apotek)',
-          desc: '1. Buka menu "Dashboard" -> Pastikan Anda memilih bulan yang diinginkan.\n2. Klik tombol "Rekap Bulanan (Excel)".\n3. File spreadsheet rapi akan terunduh dengan format standar pembukuan apotek:\n   - Kolom Pemasukan (Cash, BJB, BRI, Total Pemasukan)\n   - Kolom Pengeluaran Tunai (Rincian per kategori pengeluaran)\n   - Kolom Pengeluaran Transfer (Rincian distributor/gaji transfer)\n   - Kolom Laba Harian & Sisa Saldo Berjalan dari tanggal 1 s/d akhir bulan.'
+          desc: '1. Buka menu "Dashboard" -> Pastikan Anda memilih bulan yang diinginkan.\n2. Klik tombol "Report Bulanan".\n3. File spreadsheet rapi akan terunduh dengan format standar pembukuan apotek:\n   - Sheet 1 (Closing Monthly): Baris ke-4 mencantumkan SALDO AKHIR BULAN LALU (kuning) yang masuk ke perhitungan total kas masuk dan saldo akhir.\n   - Sheet 2 (Report Bulanan): Rincian pengeluaran pos operasional, kebutuhan owner, pemasukan, serta Rekapitulasi Sisa Kas Bersih dan Total Saldo Akhir Kumulatif.\n   - Sheet 3 (Detail Transaksi): Rekap seluruh transaksi per baris.'
         },
         {
           title: 'Ekspor Excel Rekap Tahunan (Komparasi 12 Bulan)',
-          desc: '1. Pada menu "Dashboard", klik tombol "Rekap Tahunan".\n2. Pilih tahun yang ingin diunduh (misal: 2026).\n3. Klik "Download Rekap Tahunan".\n4. File Excel akan menyajikan perbandingan kinerja keuangan bulan Januari hingga Desember lengkap dengan total akumulasi tahunan.'
+          desc: '1. Pada menu "Dashboard", klik tombol "Report Tahunan".\n2. Pilih tahun yang ingin diunduh (misal: 2026).\n3. Klik "Download Excel".\n4. File Excel akan menyajikan perbandingan kinerja keuangan bulan Januari hingga Desember lengkap dengan saldo awal yang berkesinambungan dan akumulasi tahunan.'
         },
         {
           title: 'Ekspor PDF Ringkasan Keuangan',
-          desc: 'Klik tombol "Ekspor PDF" di menu Dashboard. Dokumen PDF siap cetak akan dibuat otomatis lengkap dengan kop Apotek Assyifa Farma Cideres, ringkasan saldo, dan kolom tanda tangan pimpinan/penanggung jawab.'
+          desc: 'Klik tombol "PDF" di menu Dashboard. Dokumen PDF siap cetak akan dibuat otomatis lengkap dengan kop Apotek Assyifa Farma Cideres, baris Saldo Bulan Kemarin, Income Bruto, Rincian Biaya, dan TOTAL SALDO AKHIR KAS (KUMULATIF).'
         },
         {
           title: 'Ekspor Data Transaksi Harian (Excel Detail)',
-          desc: 'Klik tombol "Excel Detail" untuk mengunduh seluruh baris transaksi satu per satu beserta jam, kategori, dan catatannya.'
+          desc: 'Klik tombol "Excel" untuk mengunduh seluruh baris transaksi satu per satu beserta jam, kategori, dan catatannya.'
         }
       ],
       tips: [
-        'File Excel dapat langsung dibuka di Microsoft Excel (PC/Laptop), Google Spreadsheet (Google Drive), atau aplikasi WPS Office di HP Android/iPhone.',
-        'Seluruh rumus jumlah dan saldo pada Excel Rekap Bulanan terformat otomatis.'
+        'Saldo bulan kemarin yang Anda input manual otomatis tercantum di lembar Closing Excel (baris ke-4) dan PDF, sehingga pembukuan fisik dan laporan bank selalu sinkron.'
       ]
     },
     {

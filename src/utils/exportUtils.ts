@@ -27,6 +27,7 @@ export interface ExportData {
   monthYear: string;
   summary: DetailedSummary;
   loans?: Loan[];
+  startingBalance?: number;
 }
 
 export const MONTH_NAMES_ID = [
@@ -81,7 +82,7 @@ const borderSection = {
 // ==========================================
 export const exportToPDF = (data: ExportData) => {
   const doc = new jsPDF();
-  const { profile, transactions, monthYear, summary } = data;
+  const { profile, transactions, monthYear, summary, startingBalance = 0 } = data;
 
   doc.setFontSize(18);
   doc.setFont('helvetica', 'bold');
@@ -103,6 +104,12 @@ export const exportToPDF = (data: ExportData) => {
   doc.setFontSize(10);
   let yPos = 54;
   
+  // Saldo Bulan Kemarin (Awal)
+  doc.setFont('helvetica', 'bold');
+  doc.text(`Saldo Bulan Kemarin (Awal)`, 14, yPos); 
+  doc.text(formatRupiah(startingBalance), 100, yPos);
+  yPos += 6;
+
   doc.setFont('helvetica', 'bold');
   doc.text(`Income Bruto`, 14, yPos); 
   doc.text(formatRupiah(summary.incomeBruto), 100, yPos);
@@ -148,8 +155,16 @@ export const exportToPDF = (data: ExportData) => {
   doc.text(formatRupiah(summary.profitOwner), 100, yPos);
   yPos += 6;
 
-  doc.text(`Income Neto`, 14, yPos);
+  doc.text(`Income Neto Bulan Ini`, 14, yPos);
   doc.text(formatRupiah(summary.incomeNeto), 100, yPos);
+  yPos += 7;
+
+  // Cumulative Total Ending Balance
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(31, 78, 121);
+  doc.text(`TOTAL SALDO AKHIR KAS (KUMULATIF)`, 14, yPos);
+  doc.text(formatRupiah(startingBalance + summary.incomeNeto), 100, yPos);
+  doc.setTextColor(0, 0, 0);
   yPos += 10;
 
   const tableData = transactions.map((t, index) => [
@@ -903,7 +918,8 @@ export const buildMonthlyReportSheet = (
   profile: CompanyProfile,
   monthYear: string,
   transactions: Transaction[],
-  summary: DetailedSummary
+  summary: DetailedSummary,
+  startingBalance: number = 0
 ): XLSX.WorkSheet => {
   const ws: XLSX.WorkSheet = {};
   const merges: XLSX.Range[] = [];
@@ -1288,7 +1304,31 @@ export const buildMonthlyReportSheet = (
   });
   curRow++;
 
+  const totalDanaTersedia = startingBalance + summary.incomeBruto;
+  const totalSaldoAkhirKasKumulatif = startingBalance + summary.incomeNeto;
+
   const summaryCalcRows = [
+    {
+      title: 'Saldo Bulan Kemarin (Saldo Awal Kas & Bank)',
+      desc: 'Sisa Saldo Kas & Rekening Bulan Lalu',
+      formula: undefined,
+      val: startingBalance,
+      isGreen: false
+    },
+    {
+      title: 'Total Pemasukan Bruto Periode Ini',
+      desc: 'Seluruh Pemasukan Kas & Bank',
+      formula: `D${incSubtotalRow1}`,
+      val: summary.incomeBruto,
+      isGreen: false
+    },
+    {
+      title: 'TOTAL DANA TERSEDIA (Saldo Awal + Pemasukan)',
+      desc: 'Total Kas & Bank Siap Pakai',
+      formula: undefined,
+      val: totalDanaTersedia,
+      isGreen: true
+    },
     {
       title: 'Total Pengeluaran Operasional Bulanan',
       desc: 'Beban Operasional Apotek',
@@ -1304,11 +1344,11 @@ export const buildMonthlyReportSheet = (
       isGreen: false
     },
     {
-      title: 'SISA PENGHASILAN BERSIH (NETO)',
+      title: 'SISA PENGHASILAN BERSIH (NETO BULAN INI)',
       desc: 'Pemasukan - Pengeluaran Bulanan',
       formula: `D${incSubtotalRow1}-D${opsSubtotalRow1}`,
       val: summary.incomeNeto,
-      isGreen: true
+      isGreen: false
     },
     {
       title: 'Alokasi Profit Perusahaan (15%)',
@@ -1325,10 +1365,10 @@ export const buildMonthlyReportSheet = (
       isGreen: false
     },
     {
-      title: 'SISA SALDO KAS BERSIH',
-      desc: 'Setelah Pengeluaran & Pembagian',
+      title: 'TOTAL SALDO AKHIR KAS (KUMULATIF)',
+      desc: 'Saldo Bulan Kemarin + Sisa Penghasilan Bersih (Neto)',
       formula: undefined,
-      val: Math.max(0, summary.incomeNeto - (summary.profitPerusahaan + summary.profitOwner)),
+      val: totalSaldoAkhirKasKumulatif,
       isGreen: true,
       isDoubleBorder: true
     }
@@ -1565,10 +1605,17 @@ export const exportYearlyReportExcel = (
   const monthlySheets: { sheetName: string; ws: XLSX.WorkSheet }[] = [];
 
   for (let m = 0; m < 12; m++) {
-    const monthTxs = allTransactions.filter(t => {
-      const d = new Date(t.date);
-      return d.getFullYear() === year && d.getMonth() === m;
-    });
+    const mStr = `${year}-${String(m + 1).padStart(2, '0')}`;
+    const monthTxs = allTransactions.filter(t => t.date && t.date.startsWith(mStr));
+
+    // If user has a manual starting balance for this month, override running balance
+    if (
+      profile.previousMonthBalances &&
+      typeof profile.previousMonthBalances[mStr] === 'number' &&
+      !isNaN(profile.previousMonthBalances[mStr])
+    ) {
+      runningBalance = profile.previousMonthBalances[mStr];
+    }
 
     const monthName = MONTH_NAMES_ID[m];
     const sheetName = `${monthName} ${yy}`;
@@ -1614,26 +1661,28 @@ export const exportYearlyReportExcel = (
 // 8. EXPORT REPORT BULANAN
 // ==========================================
 export const exportMonthlyReportExcel = (data: ExportData) => {
-  const { profile, transactions, monthYear, summary } = data;
+  const { profile, transactions, monthYear, summary, startingBalance = 0 } = data;
   const wb = XLSX.utils.book_new();
 
   let year = new Date().getFullYear();
   let monthIdx = new Date().getMonth();
-  if (transactions.length > 0) {
-    const d = new Date(transactions[0].date);
-    year = d.getFullYear();
-    monthIdx = d.getMonth();
+  if (transactions.length > 0 && transactions[0].date) {
+    const parts = transactions[0].date.split('-').map(Number);
+    if (parts.length >= 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+      year = parts[0];
+      monthIdx = parts[1] - 1;
+    }
   }
 
   const yy = String(year).slice(-2);
   const currentMonthName = MONTH_NAMES_ID[monthIdx];
 
   // 1. Sheet 1: Closing Monthly (Exact Screenshot format)
-  const { ws: wsClosing } = buildClosingMonthlySheet(profile, year, monthIdx, transactions, 0, data.loans || []);
+  const { ws: wsClosing } = buildClosingMonthlySheet(profile, year, monthIdx, transactions, startingBalance, data.loans || []);
   XLSX.utils.book_append_sheet(wb, wsClosing, `${currentMonthName} ${yy}`);
 
   // 2. Sheet 2: Report Bulanan (Category breakdown format)
-  const wsReport = buildMonthlyReportSheet(profile, monthYear, transactions, summary);
+  const wsReport = buildMonthlyReportSheet(profile, monthYear, transactions, summary, startingBalance);
   XLSX.utils.book_append_sheet(wb, wsReport, 'Report Bulanan');
 
   // 3. Sheet 3: Detail Transaksi
@@ -1648,25 +1697,27 @@ export const exportMonthlyReportExcel = (data: ExportData) => {
 // 9. FULL MULTI-SHEET EXPORT
 // ==========================================
 export const exportToExcel = (data: ExportData) => {
-  const { profile, transactions, monthYear, summary } = data;
+  const { profile, transactions, monthYear, summary, startingBalance = 0 } = data;
   const wb = XLSX.utils.book_new();
 
   let year = new Date().getFullYear();
   let monthIdx = new Date().getMonth();
-  if (transactions.length > 0) {
-    const d = new Date(transactions[0].date);
-    year = d.getFullYear();
-    monthIdx = d.getMonth();
+  if (transactions.length > 0 && transactions[0].date) {
+    const parts = transactions[0].date.split('-').map(Number);
+    if (parts.length >= 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+      year = parts[0];
+      monthIdx = parts[1] - 1;
+    }
   }
   const yy = String(year).slice(-2);
   const currentMonthName = MONTH_NAMES_ID[monthIdx];
 
   // 1. Sheet 1: Closing Monthly
-  const { ws: wsClosing } = buildClosingMonthlySheet(profile, year, monthIdx, transactions, 0, data.loans || []);
+  const { ws: wsClosing } = buildClosingMonthlySheet(profile, year, monthIdx, transactions, startingBalance, data.loans || []);
   XLSX.utils.book_append_sheet(wb, wsClosing, `Closing ${currentMonthName} ${yy}`);
 
   // 2. Sheet 2: Report Bulanan
-  const wsReport = buildMonthlyReportSheet(profile, monthYear, transactions, summary);
+  const wsReport = buildMonthlyReportSheet(profile, monthYear, transactions, summary, startingBalance);
   XLSX.utils.book_append_sheet(wb, wsReport, 'Report Bulanan');
 
   // 3. Sheet 3: Ringkasan
