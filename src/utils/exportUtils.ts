@@ -230,41 +230,160 @@ export const buildClosingMonthlySheet = (
     s: { border: borderBlack }
   });
 
-  // Calculate transaction categories
-  const getCatSum = (keywords: string[]) => {
-    return transactions
-      .filter(t => t.type === 'outcome' && keywords.some(k => (t.category || '').toLowerCase().includes(k.toLowerCase())))
-      .reduce((sum, t) => sum + t.amount, 0);
+  // Helper for keyword checking
+  const hasKeyword = (t: Transaction, keywords: string[]) => {
+    const c = (t.category || '').toLowerCase();
+    const n = (t.notes || '').toLowerCase();
+    return keywords.some(k => c.includes(k.toLowerCase()) || n.includes(k.toLowerCase()));
   };
 
-  const incomeBruto = transactions
-    .filter(t => t.type === 'income')
-    .reduce((sum, t) => sum + t.amount, 0);
+  // 1. Process Income Transactions
+  const incomeTxs = transactions.filter(t => t.type === 'income');
+  const cnBonusIncomeKeywords = ['cn', 'bonus', 'kasbon', 'pelunasan', 'bayar kasbon'];
 
-  const totalRawOutcomes = transactions
-    .filter(t => t.type === 'outcome')
-    .reduce((sum, t) => sum + t.amount, 0);
+  let cnBonusIncome = 0;
+  let pendapatanIncome = 0;
 
-  const netIncome = Math.max(0, incomeBruto - totalRawOutcomes);
-  const shareProfitOwner = Math.round(netIncome * 0.15 * 0.20) || Math.round(netIncome * 0.03) || getCatSum(['share profit', 'profit owner']);
+  incomeTxs.forEach(t => {
+    if (hasKeyword(t, cnBonusIncomeKeywords)) {
+      cnBonusIncome += t.amount;
+    } else {
+      pendapatanIncome += t.amount;
+    }
+  });
 
-  const gajiAmount = getCatSum(['gaji', 'gajih']);
-  const uangMakanAmount = getCatSum(['uang makan', 'makan']);
-  const distributorAmount = getCatSum(['distributor']);
-  const dinkesAmount = getCatSum(['dinkes']);
-  const bpomAmount = getCatSum(['bpom']);
+  const incomeBruto = pendapatanIncome + cnBonusIncome;
 
-  const listrikAmount = getCatSum(['listrik', 'token']);
-  const airAmount = getCatSum(['air']);
-  const perumAmount = getCatSum(['perum', 'mes']);
-  const sampahAmount = getCatSum(['sampah']);
-  const keamananAmount = getCatSum(['keamanan']);
-  const rtAmount = getCatSum(['kebutuhan rt', 'rt', 'sabun']);
-  const atkAmount = getCatSum(['atk']);
-  const propertyAmount = getCatSum(['property', 'printer', 'lemari', 'inventaris']);
-  const bensinAmount = getCatSum(['bensin']);
+  // 2. Process Outcome Transactions
+  const outcomeTxs = transactions.filter(t => t.type === 'outcome');
+  const matchedOutcomeIds = new Set<string>();
 
-  // Owner loans in this month
+  // Share Profit
+  let shareProfitOwner = 0;
+  outcomeTxs.forEach(t => {
+    if (hasKeyword(t, ['share profit', 'profit owner', 'bagi hasil'])) {
+      shareProfitOwner += t.amount;
+      matchedOutcomeIds.add(t.id);
+    }
+  });
+  if (shareProfitOwner === 0) {
+    const totalOutcomesRaw = outcomeTxs.reduce((sum, t) => sum + t.amount, 0);
+    const net = Math.max(0, incomeBruto - totalOutcomesRaw);
+    shareProfitOwner = Math.round(net * 0.15 * 0.20);
+  }
+
+  // Gaji Karyawan
+  let gajiTf = 0;
+  let gajiCash = 0;
+  outcomeTxs.forEach(t => {
+    if (!matchedOutcomeIds.has(t.id) && hasKeyword(t, ['gaji', 'gajih'])) {
+      if (t.method.startsWith('tf') || hasKeyword(t, ['tf gaji', 'tf gajih'])) {
+        gajiTf += t.amount;
+      } else {
+        gajiCash += t.amount;
+      }
+      matchedOutcomeIds.add(t.id);
+    }
+  });
+
+  // Uang Makan Karyawan
+  let uangMakan = 0;
+  outcomeTxs.forEach(t => {
+    if (!matchedOutcomeIds.has(t.id) && hasKeyword(t, ['uang makan', 'makan'])) {
+      uangMakan += t.amount;
+      matchedOutcomeIds.add(t.id);
+    }
+  });
+
+  // Pembayaran Distributor
+  let distCash = 0;
+  let distTf = 0;
+  outcomeTxs.forEach(t => {
+    if (!matchedOutcomeIds.has(t.id) && hasKeyword(t, ['distributor'])) {
+      if (t.method === 'cash') {
+        distCash += t.amount;
+      } else {
+        distTf += t.amount;
+      }
+      matchedOutcomeIds.add(t.id);
+    }
+  });
+
+  // Section 8: Pengeluaran Bulanan
+  const opsData = {
+    listrik: 0,
+    property: 0,
+    atk: 0,
+    lembur: 0,
+    sumbangan: 0,
+    opsMotor: 0,
+    tamu: 0,
+    perlengkapanRt: 0,
+    cn: 0,
+    pajak: 0,
+    transfort: 0,
+    mes: 0,
+    obos: 0,
+    cashbackKasbon: 0,
+    wifi: 0,
+    returKembaliUang: 0
+  };
+
+  outcomeTxs.forEach(t => {
+    if (matchedOutcomeIds.has(t.id)) return;
+
+    if (hasKeyword(t, ['listrik', 'token', 'pln'])) {
+      opsData.listrik += t.amount;
+      matchedOutcomeIds.add(t.id);
+    } else if (hasKeyword(t, ['property', 'properti', 'inventaris', 'printer', 'lemari', 'meja', 'kursi', 'alat'])) {
+      opsData.property += t.amount;
+      matchedOutcomeIds.add(t.id);
+    } else if (hasKeyword(t, ['atk', 'kertas', 'tinta', 'pulpen', 'buku'])) {
+      opsData.atk += t.amount;
+      matchedOutcomeIds.add(t.id);
+    } else if (hasKeyword(t, ['lembur'])) {
+      opsData.lembur += t.amount;
+      matchedOutcomeIds.add(t.id);
+    } else if (hasKeyword(t, ['sumbangan', 'donasi', 'iuran warga', 'shodaqoh'])) {
+      opsData.sumbangan += t.amount;
+      matchedOutcomeIds.add(t.id);
+    } else if (hasKeyword(t, ['motor', 'bensin', 'bbm', 'servis motor', 'tambal ban', 'bensin pengiriman', 'ops motor'])) {
+      opsData.opsMotor += t.amount;
+      matchedOutcomeIds.add(t.id);
+    } else if (hasKeyword(t, ['tamu', 'konsumsi tamu'])) {
+      opsData.tamu += t.amount;
+      matchedOutcomeIds.add(t.id);
+    } else if (hasKeyword(t, ['rt', 'perlengkapan rt', 'kebutuhan rt', 'sabun', 'kebersihan', 'sapu', 'pel', 'kresek'])) {
+      opsData.perlengkapanRt += t.amount;
+      matchedOutcomeIds.add(t.id);
+    } else if (hasKeyword(t, ['cn', 'credit note'])) {
+      opsData.cn += t.amount;
+      matchedOutcomeIds.add(t.id);
+    } else if (hasKeyword(t, ['pajak', 'pph', 'ppn', 'pbb'])) {
+      opsData.pajak += t.amount;
+      matchedOutcomeIds.add(t.id);
+    } else if (hasKeyword(t, ['transfort', 'transport', 'ongkir', 'kurir', 'ekspedisi', 'travel', 'tiket'])) {
+      opsData.transfort += t.amount;
+      matchedOutcomeIds.add(t.id);
+    } else if (hasKeyword(t, ['mes', 'mess', 'kontrakan', 'kost', 'perum', 'perumahan'])) {
+      opsData.mes += t.amount;
+      matchedOutcomeIds.add(t.id);
+    } else if (hasKeyword(t, ['obos', 'air', 'pdam', 'sampah', 'keamanan', 'dinkes', 'bpom', 'iuran pos'])) {
+      opsData.obos += t.amount;
+      matchedOutcomeIds.add(t.id);
+    } else if (hasKeyword(t, ['cashback', 'kasbon', 'pinjaman karyawan', 'bon'])) {
+      opsData.cashbackKasbon += t.amount;
+      matchedOutcomeIds.add(t.id);
+    } else if (hasKeyword(t, ['wifi', 'indihome', 'internet', 'kuota'])) {
+      opsData.wifi += t.amount;
+      matchedOutcomeIds.add(t.id);
+    } else if (hasKeyword(t, ['retur', 'kembali uang', 'refund'])) {
+      opsData.returKembaliUang += t.amount;
+      matchedOutcomeIds.add(t.id);
+    }
+  });
+
+  // Section 9: Kebutuhan Owner
   const ownerLoanDisbursed = loans
     .filter(l => l.type === 'owner')
     .filter(l => {
@@ -282,423 +401,347 @@ export const buildClosingMonthlySheet = (
     })
     .reduce((sum, p) => sum + p.amount, 0);
 
-  const pinjamanOwner = Math.max(ownerLoanDisbursed, getCatSum(['pinjaman owner', 'permintaan owner', 'prive']));
-  const pelunasanOwner = Math.max(ownerPaymentsInMonth, getCatSum(['pelunasan owner', 'pelunasan pinjaman owner']));
+  let ownerTxOutcome = 0;
+  outcomeTxs.forEach(t => {
+    if (!matchedOutcomeIds.has(t.id) && hasKeyword(t, ['pinjaman owner', 'permintaan owner', 'prive'])) {
+      ownerTxOutcome += t.amount;
+      matchedOutcomeIds.add(t.id);
+    }
+  });
+
+  const pinjamanOwner = Math.max(ownerLoanDisbursed, ownerTxOutcome);
+  const pelunasanOwner = ownerPaymentsInMonth;
+
+  // Cumulative owner loans for SISA
+  const totalOwnerLoansEver = loans
+    .filter(l => l.type === 'owner')
+    .filter(l => {
+      const d = new Date(l.date);
+      return d.getFullYear() < year || (d.getFullYear() === year && d.getMonth() <= monthIndex);
+    })
+    .reduce((sum, l) => sum + l.amount, 0);
+
+  const totalOwnerPaidEver = loans
+    .filter(l => l.type === 'owner')
+    .flatMap(l => l.payments || [])
+    .filter(p => {
+      const d = new Date(p.date);
+      return d.getFullYear() < year || (d.getFullYear() === year && d.getMonth() <= monthIndex);
+    })
+    .reduce((sum, p) => sum + p.amount, 0);
+
+  const sisaPinjamanOwner = (loans.filter(l => l.type === 'owner').length > 0)
+    ? Math.max(0, totalOwnerLoansEver - totalOwnerPaidEver)
+    : Math.max(0, pinjamanOwner - pelunasanOwner);
+
+  // Any remaining unclassified outcomes are accumulated in returKembaliUang
+  outcomeTxs.forEach(t => {
+    if (!matchedOutcomeIds.has(t.id)) {
+      opsData.returKembaliUang += t.amount;
+    }
+  });
+
+  // Calculate Subtotals & Totals
+  const opsTotalComputed = Object.values(opsData).reduce((a, b) => a + b, 0);
+  const totalKeluarComputed = shareProfitOwner + gajiTf + gajiCash + uangMakan + distCash + distTf + opsTotalComputed + pinjamanOwner + pelunasanOwner;
+  const totalMasukComputed = startingBalance + pendapatanIncome + cnBonusIncome;
+  const endingBalanceComputed = totalMasukComputed - totalKeluarComputed;
 
   // Styles
   const headerStyle = {
-    font: { bold: true, sz: 10, color: { rgb: '000000' } },
-    fill: { fgColor: { rgb: '7F7F7F' } },
+    font: { name: 'Calibri', bold: true, sz: 10, color: { rgb: '000000' } },
+    fill: { fgColor: { rgb: '8497B0' } }, // Slate blue-grey matching screenshot
     alignment: { horizontal: 'center', vertical: 'center' },
     border: borderBlack
   };
 
-  const yellowAmountStyle = {
-    font: { sz: 10, color: { rgb: '000000' } },
-    fill: { fgColor: { rgb: 'FFC000' } },
-    alignment: { horizontal: 'right', vertical: 'center' },
-    border: borderBlack
-  };
-
-  const greenSubtotalStyle = {
-    font: { bold: true, sz: 10, color: { rgb: '000000' } },
-    fill: { fgColor: { rgb: '92D050' } },
-    alignment: { horizontal: 'right', vertical: 'center' },
-    border: borderBlack
-  };
-
-  const boldLabelStyle = {
-    font: { bold: true, sz: 10, color: { rgb: '000000' } },
+  const boldSectionStyle = {
+    font: { name: 'Calibri', bold: true, sz: 10, color: { rgb: '000000' } },
     alignment: { horizontal: 'left', vertical: 'center' },
     border: borderBlack
   };
 
   const normalLabelStyle = {
-    font: { sz: 10, color: { rgb: '000000' } },
+    font: { name: 'Calibri', sz: 10, color: { rgb: '000000' } },
     alignment: { horizontal: 'left', vertical: 'center' },
     border: borderBlack
   };
 
   const centerNumStyle = {
-    font: { bold: true, sz: 10, color: { rgb: '000000' } },
+    font: { name: 'Calibri', bold: true, sz: 10, color: { rgb: '000000' } },
     alignment: { horizontal: 'center', vertical: 'center' },
     border: borderBlack
   };
 
-  let curRow = 0;
+  const amountStyle = {
+    font: { name: 'Calibri', sz: 10, color: { rgb: '000000' } },
+    alignment: { horizontal: 'right', vertical: 'center' },
+    border: borderBlack
+  };
 
-  // Title: CLOSING MONTHLY
-  setCell(curRow, 0, {
-    v: 'CLOSING MONTHLY',
-    t: 's',
-    s: { font: { bold: true, sz: 12 }, alignment: { horizontal: 'center', vertical: 'center' } }
-  });
-  merges.push({ s: { r: curRow, c: 0 }, e: { r: curRow, c: 4 } });
-  curRow++;
+  const totalLabelStyle = {
+    font: { name: 'Calibri', bold: true, sz: 11, color: { rgb: '000000' } },
+    alignment: { horizontal: 'center', vertical: 'center' },
+    border: borderBlack
+  };
 
-  // Subtitle: BULAN  : [MONTH] [YY]
-  setCell(curRow, 0, {
-    v: `BULAN  : ${currentMonthName.toUpperCase()} ${yy}`,
-    t: 's',
-    s: { font: { bold: true, sz: 11 }, alignment: { horizontal: 'center', vertical: 'center' } }
-  });
-  merges.push({ s: { r: curRow, c: 0 }, e: { r: curRow, c: 4 } });
-  curRow++;
+  const totalAmountStyle = {
+    font: { name: 'Calibri', bold: true, sz: 10, color: { rgb: '000000' } },
+    alignment: { horizontal: 'right', vertical: 'center' },
+    border: borderBlack
+  };
 
-  // Row 2 (Excel row 3): Headers
-  const colHeaders = ['NO', 'KETERANGAN', 'MASUK', 'KELUAR', 'SALDO'];
-  colHeaders.forEach((h, c) => {
-    setCell(curRow, c, { v: h, t: 's', s: headerStyle });
-  });
-  curRow++;
-
-  // Row 4: 1 | SALDO AKHIR [PREV MONTH] | MASUK (yellow)
-  setCell(curRow, 0, { v: 1, t: 'n', s: centerNumStyle });
-  setCell(curRow, 1, { v: `SALDO AKHIR ${prevMonthName.toUpperCase()}`, t: 's', s: boldLabelStyle });
-  setCell(curRow, 2, { v: startingBalance, t: 'n', z: ACCOUNTING_FMT, s: yellowAmountStyle });
-  setCell(curRow, 3, emptyCell());
-  setCell(curRow, 4, emptyCell());
-  curRow++;
-
-  // Row 5: 2 | INCOME BRUTO PERUSAHAAN | MASUK (yellow)
-  setCell(curRow, 0, { v: 2, t: 'n', s: centerNumStyle });
-  setCell(curRow, 1, { v: 'INCOME BRUTO PERUSAHAAN', t: 's', s: boldLabelStyle });
-  setCell(curRow, 2, { v: incomeBruto, t: 'n', z: ACCOUNTING_FMT, s: yellowAmountStyle });
-  setCell(curRow, 3, emptyCell());
-  setCell(curRow, 4, emptyCell());
-  curRow++;
-
-  // Row 6: 3 | SHARE PROFIT TO OWNER | KELUAR (yellow)
-  setCell(curRow, 0, { v: 3, t: 'n', s: centerNumStyle });
-  setCell(curRow, 1, { v: 'SHARE PROFIT TO OWNER', t: 's', s: boldLabelStyle });
-  setCell(curRow, 2, emptyCell());
-  setCell(curRow, 3, { v: shareProfitOwner, t: 'n', z: ACCOUNTING_FMT, s: yellowAmountStyle });
-  setCell(curRow, 4, emptyCell());
-  const rowShareProfit = curRow + 1; // 1-indexed
-  curRow++;
-
-  // Row 7: 4 | GAJI KARYAWAN | KELUAR (yellow)
-  setCell(curRow, 0, { v: 4, t: 'n', s: centerNumStyle });
-  setCell(curRow, 1, { v: 'GAJI KARYAWAN', t: 's', s: boldLabelStyle });
-  setCell(curRow, 2, emptyCell());
-  setCell(curRow, 3, { v: gajiAmount, t: 'n', z: ACCOUNTING_FMT, s: yellowAmountStyle });
-  setCell(curRow, 4, emptyCell());
-  const rowGaji = curRow + 1;
-  curRow++;
-
-  // Row 8: 5 | UANG MAKAN KARYAWAN | KELUAR (yellow)
-  setCell(curRow, 0, { v: 5, t: 'n', s: centerNumStyle });
-  setCell(curRow, 1, { v: 'UANG MAKAN KARYAWAN', t: 's', s: boldLabelStyle });
-  setCell(curRow, 2, emptyCell());
-  setCell(curRow, 3, { v: uangMakanAmount, t: 'n', z: ACCOUNTING_FMT, s: yellowAmountStyle });
-  setCell(curRow, 4, emptyCell());
-  const rowUangMakan = curRow + 1;
-  curRow++;
-
-  // Row 9: 6 | PEMBAYARAN DISTRIBUTOR | KELUAR (yellow)
-  setCell(curRow, 0, { v: 6, t: 'n', s: centerNumStyle });
-  setCell(curRow, 1, { v: 'PEMBAYARAN DISTRIBUTOR', t: 's', s: boldLabelStyle });
-  setCell(curRow, 2, emptyCell());
-  setCell(curRow, 3, { v: distributorAmount, t: 'n', z: ACCOUNTING_FMT, s: yellowAmountStyle });
-  setCell(curRow, 4, emptyCell());
-  const rowDistributor = curRow + 1;
-  curRow++;
-
-  // Row 10: 7 | PENGELUARAN DINAS
-  setCell(curRow, 0, { v: 7, t: 'n', s: centerNumStyle });
-  setCell(curRow, 1, { v: 'PENGELUARAN DINAS', t: 's', s: boldLabelStyle });
-  setCell(curRow, 2, emptyCell());
-  setCell(curRow, 3, emptyCell());
-  setCell(curRow, 4, emptyCell());
-  curRow++;
-
-  // Row 11: ^ DINKES
-  setCell(curRow, 0, emptyCell());
-  setCell(curRow, 1, { v: '^ DINKES', t: 's', s: normalLabelStyle });
-  setCell(curRow, 2, emptyCell());
-  setCell(curRow, 3, { v: dinkesAmount, t: 'n', z: ACCOUNTING_FMT, s: yellowAmountStyle });
-  setCell(curRow, 4, emptyCell());
-  const rowDinkes = curRow + 1;
-  curRow++;
-
-  // Row 12: ^ BPOM
-  setCell(curRow, 0, emptyCell());
-  setCell(curRow, 1, { v: '^ BPOM', t: 's', s: normalLabelStyle });
-  setCell(curRow, 2, emptyCell());
-  setCell(curRow, 3, { v: bpomAmount, t: 'n', z: ACCOUNTING_FMT, s: yellowAmountStyle });
-  setCell(curRow, 4, emptyCell());
-  const rowBpom = curRow + 1;
-  curRow++;
-
-  // Row 13: ^ (empty placeholder)
-  setCell(curRow, 0, emptyCell());
-  setCell(curRow, 1, { v: '^', t: 's', s: normalLabelStyle });
-  setCell(curRow, 2, emptyCell());
-  setCell(curRow, 3, emptyCell());
-  setCell(curRow, 4, emptyCell());
-  curRow++;
-
-  // Row 14: ^ (empty placeholder)
-  setCell(curRow, 0, emptyCell());
-  setCell(curRow, 1, { v: '^', t: 's', s: normalLabelStyle });
-  setCell(curRow, 2, emptyCell());
-  setCell(curRow, 3, emptyCell());
-  setCell(curRow, 4, emptyCell());
-  curRow++;
-
-  // Row 15: 8 | PENGELUARAN BULANAN
-  setCell(curRow, 0, { v: 8, t: 'n', s: centerNumStyle });
-  setCell(curRow, 1, { v: 'PENGELUARAN BULANAN', t: 's', s: boldLabelStyle });
-  setCell(curRow, 2, emptyCell());
-  setCell(curRow, 3, emptyCell());
-  setCell(curRow, 4, emptyCell());
-  curRow++;
-
-  // Operational items
-  const opsRows = [
-    { label: '^ LISTRIK', amount: listrikAmount },
-    { label: '^ AIR', amount: airAmount },
-    { label: '^ PERUM PERUSAHAAN', amount: perumAmount },
-    { label: '^ SAMPAH', amount: sampahAmount },
-    { label: '^ KEAMANAN', amount: keamananAmount },
-    { label: '^ KEBUTUHAN RT (sabun dll)', amount: rtAmount },
-    { label: '^ ATK', amount: atkAmount },
-    { label: '^ PROPERTY (lemari, printer, dll)', amount: propertyAmount },
-    { label: '^ ISI BENSIN MOTOR OPS', amount: bensinAmount }
-  ];
-
-  const opsStart1 = curRow + 1;
-  opsRows.forEach(item => {
-    setCell(curRow, 0, emptyCell());
-    setCell(curRow, 1, { v: item.label, t: 's', s: normalLabelStyle });
-    setCell(curRow, 2, emptyCell());
-    setCell(curRow, 3, { v: item.amount, t: 'n', z: ACCOUNTING_FMT, s: yellowAmountStyle });
-    setCell(curRow, 4, emptyCell());
-    curRow++;
-  });
-  const opsEnd1 = curRow;
-
-  // Subtotal Pengeluaran Bulanan: TOTAL (Green Highlight)
-  const opsSubtotalAmount = opsRows.reduce((sum, item) => sum + item.amount, 0);
-  setCell(curRow, 0, emptyCell());
-  setCell(curRow, 1, { v: 'TOTAL', t: 's', s: { font: { bold: true, sz: 10 }, alignment: { horizontal: 'right', vertical: 'center' }, border: borderBlack } });
-  setCell(curRow, 2, emptyCell());
-  setCell(curRow, 3, {
-    f: `SUM(D${opsStart1}:D${opsEnd1})`,
-    v: opsSubtotalAmount,
-    t: 'n',
-    z: ACCOUNTING_FMT,
-    s: greenSubtotalStyle
-  });
-  setCell(curRow, 4, emptyCell());
-  const rowOpsSubtotal = curRow + 1;
-  curRow++;
-
-  // Row: 9 | KEBUTUHAN OWNER
-  setCell(curRow, 0, { v: 9, t: 'n', s: centerNumStyle });
-  setCell(curRow, 1, { v: 'KEBUTUHAN OWNER', t: 's', s: boldLabelStyle });
-  setCell(curRow, 2, emptyCell());
-  setCell(curRow, 3, emptyCell());
-  setCell(curRow, 4, emptyCell());
-  curRow++;
-
-  const ownerStart1 = curRow + 1;
-  setCell(curRow, 0, emptyCell());
-  setCell(curRow, 1, { v: '^ PINJAMAN', t: 's', s: normalLabelStyle });
-  setCell(curRow, 2, emptyCell());
-  setCell(curRow, 3, { v: pinjamanOwner, t: 'n', z: ACCOUNTING_FMT, s: yellowAmountStyle });
-  setCell(curRow, 4, emptyCell());
-  curRow++;
-
-  setCell(curRow, 0, emptyCell());
-  setCell(curRow, 1, { v: '^ PELUNASAN', t: 's', s: normalLabelStyle });
-  setCell(curRow, 2, emptyCell());
-  setCell(curRow, 3, { v: pelunasanOwner, t: 'n', z: ACCOUNTING_FMT, s: yellowAmountStyle });
-  setCell(curRow, 4, emptyCell());
-  curRow++;
-  const ownerEnd1 = curRow;
-
-  // Subtotal Kebutuhan Owner (Green Highlight)
-  const ownerSubtotalAmount = pinjamanOwner + pelunasanOwner;
-  setCell(curRow, 0, emptyCell());
-  setCell(curRow, 1, emptyCell());
-  setCell(curRow, 2, emptyCell());
-  setCell(curRow, 3, {
-    f: `SUM(D${ownerStart1}:D${ownerEnd1})`,
-    v: ownerSubtotalAmount,
-    t: 'n',
-    z: ACCOUNTING_FMT,
-    s: greenSubtotalStyle
-  });
-  setCell(curRow, 4, emptyCell());
-  const rowOwnerSubtotal = curRow + 1;
-  curRow++;
-
-  // Row: 10 | PINJAMAN KARYAWAN
-  setCell(curRow, 0, { v: 10, t: 'n', s: centerNumStyle });
-  setCell(curRow, 1, { v: 'PINJAMAN KARYAWAN', t: 's', s: boldLabelStyle });
-  setCell(curRow, 2, emptyCell());
-  setCell(curRow, 3, emptyCell());
-  setCell(curRow, 4, emptyCell());
-  curRow++;
-
-  // Process employee loans data
-  const employeeLoans = loans.filter(l => l.type === 'employee');
-  const employeeDataMap = new Map<string, { pinjamanInMonth: number; pelunasanInMonth: number; totalLoan: number; totalPaid: number }>();
-
-  employeeLoans.forEach(l => {
-    const name = (l.borrowerName || '').trim() || 'Karyawan';
-    if (!employeeDataMap.has(name)) {
-      employeeDataMap.set(name, { pinjamanInMonth: 0, pelunasanInMonth: 0, totalLoan: 0, totalPaid: 0 });
-    }
-    const data = employeeDataMap.get(name)!;
-
-    const loanDate = new Date(l.date);
-    const isThisMonth = loanDate.getFullYear() === year && loanDate.getMonth() === monthIndex;
-    const isUpToThisMonth = loanDate.getFullYear() < year || (loanDate.getFullYear() === year && loanDate.getMonth() <= monthIndex);
-
-    if (isThisMonth) {
-      data.pinjamanInMonth += l.amount;
-    }
-    if (isUpToThisMonth) {
-      data.totalLoan += l.amount;
-    }
-
-    (l.payments || []).forEach(p => {
-      const payDate = new Date(p.date);
-      const isPayThisMonth = payDate.getFullYear() === year && payDate.getMonth() === monthIndex;
-      const isPayUpToThisMonth = payDate.getFullYear() < year || (payDate.getFullYear() === year && payDate.getMonth() <= monthIndex);
-
-      if (isPayThisMonth) {
-        data.pelunasanInMonth += p.amount;
-      }
-      if (isPayUpToThisMonth) {
-        data.totalPaid += p.amount;
-      }
-    });
-  });
-
-  const employeeList = Array.from(employeeDataMap.entries()).map(([name, d]) => {
-    const remaining = Math.max(0, d.totalLoan - d.totalPaid);
-    const isLunas = d.totalLoan > 0 && remaining <= 0;
+  const formatCurrencyCell = (val: number) => {
+    if (!val || val === 0) return emptyCell();
     return {
-      name,
-      pinjamanInMonth: d.pinjamanInMonth,
-      pelunasanInMonth: d.pelunasanInMonth,
-      remaining,
-      isLunas
+      v: val,
+      t: 'n',
+      z: '"Rp"#,##0;("Rp"#,##0);0',
+      s: amountStyle
     };
+  };
+
+  // Build 44 Rows Exactly Matching Screenshot:
+  // Row 1 (r = 0): Company Name
+  setCell(0, 0, {
+    v: profile.name.toUpperCase(),
+    t: 's',
+    s: { font: { bold: true, sz: 11, color: { rgb: '1F4E79' } }, alignment: { horizontal: 'left', vertical: 'center' } }
   });
+  merges.push({ s: { r: 0, c: 0 }, e: { r: 0, c: 4 } });
 
-  // Always show at least 3 blocks to preserve the image format
-  const blocksToRender = Math.max(3, employeeList.length);
+  // Row 2 (r = 1): Period Title
+  setCell(1, 0, {
+    v: `LAPORAN ARUS KAS - ${currentMonthName.toUpperCase()} ${year}`,
+    t: 's',
+    s: { font: { italic: true, sz: 9, color: { rgb: '555555' } }, alignment: { horizontal: 'left', vertical: 'center' } }
+  });
+  merges.push({ s: { r: 1, c: 0 }, e: { r: 1, c: 4 } });
 
-  for (let k = 0; k < blocksToRender; k++) {
-    const emp = employeeList[k];
-
-    setCell(curRow, 0, emptyCell());
-    setCell(curRow, 1, { 
-      v: emp ? `NAMA : ${emp.name.toUpperCase()}` : 'NAMA : ', 
-      t: 's', 
-      s: emp ? boldLabelStyle : normalLabelStyle 
-    });
-    setCell(curRow, 2, emptyCell());
-    setCell(curRow, 3, emptyCell());
-    setCell(curRow, 4, emptyCell());
-    curRow++;
-
-    setCell(curRow, 0, emptyCell());
-    setCell(curRow, 1, { v: '^ PINJAMAN', t: 's', s: normalLabelStyle });
-    setCell(curRow, 2, emptyCell());
-    if (emp && emp.pinjamanInMonth > 0) {
-      setCell(curRow, 3, { v: emp.pinjamanInMonth, t: 'n', z: ACCOUNTING_FMT, s: yellowAmountStyle });
-    } else {
-      setCell(curRow, 3, emptyCell());
-    }
-    setCell(curRow, 4, emptyCell());
-    curRow++;
-
-    setCell(curRow, 0, emptyCell());
-    setCell(curRow, 1, { v: '^ PELUNASAN', t: 's', s: normalLabelStyle });
-    setCell(curRow, 2, emptyCell());
-    if (emp && emp.pelunasanInMonth > 0) {
-      setCell(curRow, 3, { v: emp.pelunasanInMonth, t: 'n', z: ACCOUNTING_FMT, s: yellowAmountStyle });
-    } else {
-      setCell(curRow, 3, emptyCell());
-    }
-    setCell(curRow, 4, emptyCell());
-    curRow++;
-
-    setCell(curRow, 0, emptyCell());
-    setCell(curRow, 1, { v: 'KURANG / LUNAS', t: 's', s: { font: { sz: 9, bold: true }, alignment: { horizontal: 'right', vertical: 'center' }, border: borderBlack } });
-    setCell(curRow, 2, emptyCell());
-    setCell(curRow, 3, emptyCell());
-    if (emp) {
-      if (emp.isLunas) {
-        setCell(curRow, 4, { 
-          v: 'LUNAS', 
-          t: 's', 
-          s: { font: { bold: true, sz: 10, color: { rgb: '006100' } }, alignment: { horizontal: 'center', vertical: 'center' }, border: borderBlack } 
-        });
-      } else if (emp.remaining > 0) {
-        setCell(curRow, 4, { 
-          v: emp.remaining, 
-          t: 'n', 
-          z: ACCOUNTING_FMT, 
-          s: { font: { bold: true, sz: 10, color: { rgb: 'C00000' } }, alignment: { horizontal: 'right', vertical: 'center' }, border: borderBlack } 
-        });
-      } else {
-        setCell(curRow, 4, emptyCell());
-      }
-    } else {
-      setCell(curRow, 4, emptyCell());
-    }
-    curRow++;
+  // Row 3 (r = 2): Empty Divider Row
+  for (let c = 0; c < 5; c++) {
+    setCell(2, c, { v: '', t: 's' });
   }
 
-  // BOTTOM ROW: TOTAL
-  const totalRow1 = curRow + 1; // 1-indexed
-  const totalExpensesComputed = shareProfitOwner + gajiAmount + uangMakanAmount + distributorAmount + dinkesAmount + bpomAmount + opsSubtotalAmount + ownerSubtotalAmount;
-  const endingBalanceComputed = (startingBalance + incomeBruto) - totalExpensesComputed;
+  // Row 4 (r = 3): Column Headers
+  const colHeaders = ['NO', 'KETERANGAN', 'MASUK', 'KELUAR', 'SALDO'];
+  colHeaders.forEach((h, c) => {
+    setCell(3, c, { v: h, t: 's', s: headerStyle });
+  });
 
-  setCell(curRow, 0, emptyCell());
-  setCell(curRow, 1, {
-    v: 'TOTAL',
-    t: 's',
-    s: { font: { bold: true, sz: 11, color: { rgb: '000000' } }, alignment: { horizontal: 'center', vertical: 'center' }, border: borderBlack }
+  // Row 5 (r = 4): 1 | SALDO AKHIR [bulan lalu]
+  setCell(4, 0, { v: 1, t: 'n', s: centerNumStyle });
+  setCell(4, 1, { v: `SALDO AKHIR ${prevMonthName.toLowerCase()}`, t: 's', s: boldSectionStyle });
+  setCell(4, 2, startingBalance > 0 ? formatCurrencyCell(startingBalance) : emptyCell());
+  setCell(4, 3, emptyCell());
+  setCell(4, 4, emptyCell());
+
+  // Row 6 (r = 5): Blank row
+  for (let c = 0; c < 5; c++) setCell(5, c, emptyCell());
+
+  // Row 7 (r = 6): 2 | INCOME BRUTO PERUSAHAAN
+  setCell(6, 0, { v: 2, t: 'n', s: centerNumStyle });
+  setCell(6, 1, { v: 'INCOME BRUTO PERUSAHAAN', t: 's', s: boldSectionStyle });
+  setCell(6, 2, emptyCell());
+  setCell(6, 3, emptyCell());
+  setCell(6, 4, emptyCell());
+
+  // Row 8 (r = 7): PENDAPATAN
+  setCell(7, 0, emptyCell());
+  setCell(7, 1, { v: 'PENDAPATAN', t: 's', s: normalLabelStyle });
+  setCell(7, 2, formatCurrencyCell(pendapatanIncome));
+  setCell(7, 3, emptyCell());
+  setCell(7, 4, emptyCell());
+
+  // Row 9 (r = 8): CN/BONUS/BAYAR KASBON
+  setCell(8, 0, emptyCell());
+  setCell(8, 1, { v: 'CN/BONUS/BAYAR KASBON', t: 's', s: normalLabelStyle });
+  setCell(8, 2, formatCurrencyCell(cnBonusIncome));
+  setCell(8, 3, emptyCell());
+  setCell(8, 4, emptyCell());
+
+  // Row 10 (r = 9): Blank row
+  for (let c = 0; c < 5; c++) setCell(9, c, emptyCell());
+
+  // Row 11 (r = 10): 3 | SHARE PROFIT TO OWNER
+  setCell(10, 0, { v: 3, t: 'n', s: centerNumStyle });
+  setCell(10, 1, { v: 'SHARE PROFIT TO OWNER', t: 's', s: boldSectionStyle });
+  setCell(10, 2, emptyCell());
+  setCell(10, 3, formatCurrencyCell(shareProfitOwner));
+  setCell(10, 4, emptyCell());
+
+  // Row 12 (r = 11): Blank row
+  for (let c = 0; c < 5; c++) setCell(11, c, emptyCell());
+
+  // Row 13 (r = 12): 4 | GAJI KARYAWAN
+  setCell(12, 0, { v: 4, t: 'n', s: centerNumStyle });
+  setCell(12, 1, { v: 'GAJI KARYAWAN', t: 's', s: boldSectionStyle });
+  setCell(12, 2, emptyCell());
+  setCell(12, 3, emptyCell());
+  setCell(12, 4, emptyCell());
+
+  // Row 14 (r = 13): GAJI TF
+  setCell(13, 0, emptyCell());
+  setCell(13, 1, { v: 'GAJI TF', t: 's', s: normalLabelStyle });
+  setCell(13, 2, emptyCell());
+  setCell(13, 3, formatCurrencyCell(gajiTf));
+  setCell(13, 4, emptyCell());
+
+  // Row 15 (r = 14): GAJI CASH
+  setCell(14, 0, emptyCell());
+  setCell(14, 1, { v: 'GAJI CASH', t: 's', s: normalLabelStyle });
+  setCell(14, 2, emptyCell());
+  setCell(14, 3, formatCurrencyCell(gajiCash));
+  setCell(14, 4, emptyCell());
+
+  // Row 16 (r = 15): Blank row
+  for (let c = 0; c < 5; c++) setCell(15, c, emptyCell());
+
+  // Row 17 (r = 16): 5 | UANG MAKAN KARYAWAN
+  setCell(16, 0, { v: 5, t: 'n', s: centerNumStyle });
+  setCell(16, 1, { v: 'UANG MAKAN KARYAWAN', t: 's', s: boldSectionStyle });
+  setCell(16, 2, emptyCell());
+  setCell(16, 3, formatCurrencyCell(uangMakan));
+  setCell(16, 4, emptyCell());
+
+  // Row 18 (r = 17): Blank row
+  for (let c = 0; c < 5; c++) setCell(17, c, emptyCell());
+
+  // Row 19 (r = 18): 6 | PEMBAYARAN DISTRIBUTOR
+  setCell(18, 0, { v: 6, t: 'n', s: centerNumStyle });
+  setCell(18, 1, { v: 'PEMBAYARAN DISTRIBUTOR', t: 's', s: boldSectionStyle });
+  setCell(18, 2, emptyCell());
+  setCell(18, 3, emptyCell());
+  setCell(18, 4, emptyCell());
+
+  // Row 20 (r = 19): CASH
+  setCell(19, 0, emptyCell());
+  setCell(19, 1, { v: 'CASH', t: 's', s: normalLabelStyle });
+  setCell(19, 2, emptyCell());
+  setCell(19, 3, formatCurrencyCell(distCash));
+  setCell(19, 4, emptyCell());
+
+  // Row 21 (r = 20): TF
+  setCell(20, 0, emptyCell());
+  setCell(20, 1, { v: 'TF', t: 's', s: normalLabelStyle });
+  setCell(20, 2, emptyCell());
+  setCell(20, 3, formatCurrencyCell(distTf));
+  setCell(20, 4, emptyCell());
+
+  // Row 22 (r = 21): Blank row
+  for (let c = 0; c < 5; c++) setCell(21, c, emptyCell());
+
+  // Row 23 (r = 22): 8 | PENGELUARAN BULANAN
+  setCell(22, 0, { v: 8, t: 'n', s: centerNumStyle });
+  setCell(22, 1, { v: 'PENGELUARAN BULANAN', t: 's', s: boldSectionStyle });
+  setCell(22, 2, emptyCell());
+  setCell(22, 3, emptyCell());
+  setCell(22, 4, emptyCell());
+
+  // Rows 24 to 39 (r = 23 to 38): Sub-items under PENGELUARAN BULANAN
+  const opsList = [
+    { label: '^ LISTRIK', amount: opsData.listrik },
+    { label: '^ PROPERTY', amount: opsData.property },
+    { label: 'ATK', amount: opsData.atk },
+    { label: 'LEMBUR', amount: opsData.lembur },
+    { label: 'SUMBANGAN', amount: opsData.sumbangan },
+    { label: 'OPS MOTOR', amount: opsData.opsMotor },
+    { label: 'TAMU', amount: opsData.tamu },
+    { label: 'PERLENGKAPAN RT', amount: opsData.perlengkapanRt },
+    { label: 'CN', amount: opsData.cn },
+    { label: 'PAJAK', amount: opsData.pajak },
+    { label: 'TRANSFORT', amount: opsData.transfort },
+    { label: 'MES', amount: opsData.mes },
+    { label: 'OBOS', amount: opsData.obos },
+    { label: 'CASHBACK/KASBON', amount: opsData.cashbackKasbon },
+    { label: 'WIFI', amount: opsData.wifi },
+    { label: 'RETUR/KEMBALI UANG', amount: opsData.returKembaliUang }
+  ];
+
+  opsList.forEach((item, idx) => {
+    const rowIdx = 23 + idx;
+    setCell(rowIdx, 0, emptyCell());
+    setCell(rowIdx, 1, { v: item.label, t: 's', s: normalLabelStyle });
+    setCell(rowIdx, 2, emptyCell());
+    setCell(rowIdx, 3, formatCurrencyCell(item.amount));
+    setCell(rowIdx, 4, emptyCell());
   });
-  setCell(curRow, 2, {
-    f: `SUM(C4:C5)`,
-    v: startingBalance + incomeBruto,
+
+  // Row 40 (r = 39): 9 | KEBUTUHAN OWNER
+  setCell(39, 0, { v: 9, t: 'n', s: centerNumStyle });
+  setCell(39, 1, { v: 'KEBUTUHAN OWNER', t: 's', s: boldSectionStyle });
+  setCell(39, 2, emptyCell());
+  setCell(39, 3, emptyCell());
+  setCell(39, 4, emptyCell());
+
+  // Row 41 (r = 40): ^ PINJAMAN
+  setCell(40, 0, emptyCell());
+  setCell(40, 1, { v: '^ PINJAMAN', t: 's', s: normalLabelStyle });
+  setCell(40, 2, emptyCell());
+  setCell(40, 3, formatCurrencyCell(pinjamanOwner));
+  setCell(40, 4, emptyCell());
+
+  // Row 42 (r = 41): ^ PELUNASAN
+  setCell(41, 0, emptyCell());
+  setCell(41, 1, { v: '^ PELUNASAN', t: 's', s: normalLabelStyle });
+  setCell(41, 2, emptyCell());
+  setCell(41, 3, formatCurrencyCell(pelunasanOwner));
+  setCell(41, 4, emptyCell());
+
+  // Row 43 (r = 42): SISA
+  setCell(42, 0, emptyCell());
+  setCell(42, 1, { v: 'SISA', t: 's', s: normalLabelStyle });
+  setCell(42, 2, emptyCell());
+  setCell(42, 3, emptyCell());
+  setCell(42, 4, formatCurrencyCell(sisaPinjamanOwner));
+
+  // Row 44 (r = 43): TOTAL
+  setCell(43, 0, emptyCell());
+  setCell(43, 1, { v: 'TOTAL', t: 's', s: totalLabelStyle });
+  setCell(43, 2, {
+    f: 'SUM(C5:C43)',
+    v: totalMasukComputed,
     t: 'n',
-    z: ACCOUNTING_FMT,
-    s: { font: { bold: true, sz: 10, color: { rgb: '000000' } }, alignment: { horizontal: 'right', vertical: 'center' }, border: borderBlack }
+    z: '#,##0;(#,##0);0',
+    s: totalAmountStyle
   });
-  setCell(curRow, 3, {
-    f: `D${rowShareProfit}+D${rowGaji}+D${rowUangMakan}+D${rowDistributor}+D${rowDinkes}+D${rowBpom}+D${rowOpsSubtotal}+D${rowOwnerSubtotal}`,
-    v: totalExpensesComputed,
+  setCell(43, 3, {
+    f: 'SUM(D5:D43)',
+    v: totalKeluarComputed,
     t: 'n',
-    z: ACCOUNTING_FMT,
-    s: { font: { bold: true, sz: 10, color: { rgb: '000000' } }, alignment: { horizontal: 'right', vertical: 'center' }, border: borderBlack }
+    z: '#,##0;(#,##0);0',
+    s: totalAmountStyle
   });
-  setCell(curRow, 4, {
-    f: `C${totalRow1}-D${totalRow1}`,
+  setCell(43, 4, {
+    f: 'C44-D44',
     v: endingBalanceComputed,
     t: 'n',
-    z: ACCOUNTING_FMT,
-    s: { font: { bold: true, sz: 10, color: { rgb: '000000' } }, alignment: { horizontal: 'right', vertical: 'center' }, border: borderBlack }
+    z: '#,##0;(#,##0);0',
+    s: totalAmountStyle
   });
-  curRow++;
 
-  // Metadata
-  ws['!ref'] = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: curRow - 1, c: 4 } });
+  // Range and Column/Row Metadata
+  ws['!ref'] = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: 43, c: 4 } });
   ws['!cols'] = [
-    { wch: 6 },  // NO
-    { wch: 38 }, // KETERANGAN
-    { wch: 19 }, // MASUK
-    { wch: 19 }, // KELUAR
-    { wch: 19 }  // SALDO
+    { wch: 6 },  // Col A: NO
+    { wch: 38 }, // Col B: KETERANGAN
+    { wch: 19 }, // Col C: MASUK
+    { wch: 19 }, // Col D: KELUAR
+    { wch: 19 }  // Col E: SALDO
   ];
+
+  // Professional row heights
+  const rowHeights = [
+    { hpt: 22 }, // Row 1
+    { hpt: 18 }, // Row 2
+    { hpt: 10 }, // Row 3
+    { hpt: 26 }, // Row 4 Header
+  ];
+  for (let r = 4; r < 43; r++) {
+    rowHeights.push({ hpt: 20 });
+  }
+  rowHeights.push({ hpt: 24 }); // Row 44 TOTAL
+  ws['!rows'] = rowHeights;
   ws['!merges'] = merges;
 
   return {
@@ -706,11 +749,11 @@ export const buildClosingMonthlySheet = (
     endingBalance: endingBalanceComputed,
     stats: {
       incomeBruto,
-      opsExpenses: opsSubtotalAmount,
-      ownerExpenses: ownerSubtotalAmount,
-      totalExpenses: totalExpensesComputed,
+      opsExpenses: opsTotalComputed,
+      ownerExpenses: pinjamanOwner + pelunasanOwner,
+      totalExpenses: totalKeluarComputed,
       shareProfitOwner,
-      gajiTotal: gajiAmount
+      gajiTotal: gajiTf + gajiCash
     }
   };
 };
@@ -1677,9 +1720,9 @@ export const exportMonthlyReportExcel = (data: ExportData) => {
   const yy = String(year).slice(-2);
   const currentMonthName = MONTH_NAMES_ID[monthIdx];
 
-  // 1. Sheet 1: Closing Monthly (Exact Screenshot format)
+  // 1. Sheet 1: Closing Monthly (Exact Screenshot format matching 'income' tab)
   const { ws: wsClosing } = buildClosingMonthlySheet(profile, year, monthIdx, transactions, startingBalance, data.loans || []);
-  XLSX.utils.book_append_sheet(wb, wsClosing, `${currentMonthName} ${yy}`);
+  XLSX.utils.book_append_sheet(wb, wsClosing, 'income');
 
   // 2. Sheet 2: Report Bulanan (Category breakdown format)
   const wsReport = buildMonthlyReportSheet(profile, monthYear, transactions, summary, startingBalance);
@@ -1712,9 +1755,9 @@ export const exportToExcel = (data: ExportData) => {
   const yy = String(year).slice(-2);
   const currentMonthName = MONTH_NAMES_ID[monthIdx];
 
-  // 1. Sheet 1: Closing Monthly
+  // 1. Sheet 1: Closing Monthly ('income' tab matching screenshot)
   const { ws: wsClosing } = buildClosingMonthlySheet(profile, year, monthIdx, transactions, startingBalance, data.loans || []);
-  XLSX.utils.book_append_sheet(wb, wsClosing, `Closing ${currentMonthName} ${yy}`);
+  XLSX.utils.book_append_sheet(wb, wsClosing, 'income');
 
   // 2. Sheet 2: Report Bulanan
   const wsReport = buildMonthlyReportSheet(profile, monthYear, transactions, summary, startingBalance);
