@@ -146,12 +146,15 @@ export const exportToPDF = (data: ExportData) => {
     yPos += 6;
   });
 
+  const compPct = profile.companyProfitPercent ?? 15;
+  const ownerPct = profile.ownerProfitPercent ?? 20;
+
   doc.setFont('helvetica', 'bold');
-  doc.text(`Profit Perusahaan 15%`, 14, yPos);
+  doc.text(`Profit Perusahaan (${compPct}%)`, 14, yPos);
   doc.text(formatRupiah(summary.profitPerusahaan), 100, yPos);
   yPos += 6;
 
-  doc.text(`Profit Owner`, 14, yPos);
+  doc.text(`Profit Owner (${ownerPct}%)`, 14, yPos);
   doc.text(formatRupiah(summary.profitOwner), 100, yPos);
   yPos += 6;
 
@@ -269,7 +272,9 @@ export const buildClosingMonthlySheet = (
   if (shareProfitOwner === 0) {
     const totalOutcomesRaw = outcomeTxs.reduce((sum, t) => sum + t.amount, 0);
     const net = Math.max(0, incomeBruto - totalOutcomesRaw);
-    shareProfitOwner = Math.round(net * 0.15 * 0.20);
+    const compRate = (profile.companyProfitPercent ?? 15) / 100;
+    const ownerRate = (profile.ownerProfitPercent ?? 20) / 100;
+    shareProfitOwner = Math.round(net * compRate * ownerRate);
   }
 
   // Gaji Karyawan
@@ -1203,9 +1208,10 @@ export const buildMonthlyReportSheet = (
     });
   }
 
+  const ownerPct = profile.ownerProfitPercent ?? 20;
   if (summary.profitOwner > 0) {
     ownerItems.push({
-      name: 'Alokasi Profit Owner (20%)',
+      name: `Alokasi Profit Owner (${ownerPct}%)`,
       desc: 'Hak Bagi Hasil Pemilik dari Laba Bersih',
       amount: summary.profitOwner
     });
@@ -1394,14 +1400,14 @@ export const buildMonthlyReportSheet = (
       isGreen: false
     },
     {
-      title: 'Alokasi Profit Perusahaan (15%)',
+      title: `Alokasi Profit Perusahaan (${profile.companyProfitPercent ?? 15}%)`,
       desc: 'Dana Cadangan & Pengembangan',
       formula: undefined,
       val: summary.profitPerusahaan,
       isGreen: false
     },
     {
-      title: 'Alokasi Profit Owner (20%)',
+      title: `Alokasi Profit Owner (${profile.ownerProfitPercent ?? 20}%)`,
       desc: 'Bagi Hasil Pemilik Apotek',
       formula: undefined,
       val: summary.profitOwner,
@@ -1603,8 +1609,11 @@ export const buildSummarySheet = (profile: CompanyProfile, title: string, s: Det
     summaryData.push([` - ${item.name}`, item.amount]);
   });
 
-  summaryData.push(['Profit Perusahaan 15%', s.profitPerusahaan]);
-  summaryData.push(['Profit Owner', s.profitOwner]);
+  const compPct = profile.companyProfitPercent ?? 15;
+  const ownerPct = profile.ownerProfitPercent ?? 20;
+
+  summaryData.push([`Profit Perusahaan (${compPct}%)`, s.profitPerusahaan]);
+  summaryData.push([`Profit Owner (${ownerPct}%)`, s.profitOwner]);
   summaryData.push(['Income Neto', s.incomeNeto]);
 
   const ws = XLSX.utils.aoa_to_sheet(summaryData);

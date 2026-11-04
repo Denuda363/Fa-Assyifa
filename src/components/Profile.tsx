@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { CompanyProfile } from '../types';
-import { Building2, MapPin, Phone, Save, FileCheck, CheckCircle2, ShieldCheck, Printer } from 'lucide-react';
+import { Building2, MapPin, Phone, Save, FileCheck, CheckCircle2, ShieldCheck, Printer, Percent, PieChart, Sparkles } from 'lucide-react';
 
 interface ProfileProps {
   profile: CompanyProfile;
@@ -12,14 +12,26 @@ export default function Profile({ profile, onUpdate }: ProfileProps) {
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState('');
 
+  React.useEffect(() => {
+    setFormData(profile);
+  }, [profile]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSaving(true);
-    await onUpdate(formData);
+    await onUpdate({
+      ...formData,
+      companyProfitPercent: Number(formData.companyProfitPercent) || 15,
+      ownerProfitPercent: Number(formData.ownerProfitPercent) || 20
+    });
     setIsSaving(false);
-    setSaveMessage('Profil berhasil disimpan ke cloud database!');
+    setSaveMessage('Profil & Pengaturan Profit berhasil disimpan ke cloud database!');
     setTimeout(() => setSaveMessage(''), 3500);
   };
+
+  const compPct = formData.companyProfitPercent ?? 15;
+  const ownerPct = formData.ownerProfitPercent ?? 20;
+  const effectiveOwnerPct = ((compPct * ownerPct) / 100).toFixed(2);
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
@@ -111,13 +123,88 @@ export default function Profile({ profile, onUpdate }: ProfileProps) {
                 </div>
               </div>
 
+              {/* Persentase Bagi Hasil Section */}
+              <div className="pt-4 border-t border-neutral-800/80 space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Percent className="w-4 h-4 text-amber-400" />
+                    <span className="text-xs font-bold text-white uppercase tracking-wider">
+                      Pengaturan Persentase Bagi Hasil (Profit)
+                    </span>
+                  </div>
+                  <span className="text-[10px] font-mono text-amber-300 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+                    Efektif: {effectiveOwnerPct}%
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Company Profit % */}
+                  <div>
+                    <label htmlFor="company-profit-pct-profile" className="block text-xs font-bold text-neutral-300 uppercase tracking-wider mb-2">
+                      Profit Perusahaan (%)
+                    </label>
+                    <div className="flex rounded-xl shadow-inner border border-neutral-800/80 bg-neutral-950/70 overflow-hidden focus-within:border-indigo-500 transition-all">
+                      <span className="inline-flex items-center px-3.5 border-r border-neutral-800 text-neutral-500 text-sm">
+                        <PieChart className="h-4 w-4" />
+                      </span>
+                      <input
+                        type="number"
+                        id="company-profit-pct-profile"
+                        min="0"
+                        max="100"
+                        step="0.1"
+                        value={formData.companyProfitPercent ?? 15}
+                        onChange={(e) => setFormData({ ...formData, companyProfitPercent: parseFloat(e.target.value) || 0 })}
+                        className="flex-1 block w-full bg-transparent text-white py-2.5 px-3.5 text-sm font-mono font-bold outline-none"
+                        placeholder="15"
+                      />
+                      <span className="px-3 py-2.5 text-xs text-indigo-400 font-bold bg-indigo-500/10 border-l border-neutral-800">
+                        %
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-neutral-500 mt-1">Alokasi dari laba bersih (Standar: 15%)</p>
+                  </div>
+
+                  {/* Owner Profit % */}
+                  <div>
+                    <label htmlFor="owner-profit-pct-profile" className="block text-xs font-bold text-neutral-300 uppercase tracking-wider mb-2">
+                      Profit Owner (%)
+                    </label>
+                    <div className="flex rounded-xl shadow-inner border border-neutral-800/80 bg-neutral-950/70 overflow-hidden focus-within:border-amber-500 transition-all">
+                      <span className="inline-flex items-center px-3.5 border-r border-neutral-800 text-neutral-500 text-sm">
+                        <Percent className="h-4 w-4" />
+                      </span>
+                      <input
+                        type="number"
+                        id="owner-profit-pct-profile"
+                        min="0"
+                        max="100"
+                        step="0.1"
+                        value={formData.ownerProfitPercent ?? 20}
+                        onChange={(e) => setFormData({ ...formData, ownerProfitPercent: parseFloat(e.target.value) || 0 })}
+                        className="flex-1 block w-full bg-transparent text-white py-2.5 px-3.5 text-sm font-mono font-bold outline-none"
+                        placeholder="20"
+                      />
+                      <span className="px-3 py-2.5 text-xs text-amber-400 font-bold bg-amber-500/10 border-l border-neutral-800">
+                        %
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-neutral-500 mt-1">Hak owner dari profit perusahaan (Standar: 20%)</p>
+                  </div>
+                </div>
+
+                <div className="p-3 rounded-xl bg-neutral-950/50 border border-neutral-800/60 text-xs text-neutral-400 font-mono">
+                  Rumus Excel: <span className="text-white">Laba Bersih × {compPct}% × {ownerPct}%</span> = <span className="text-amber-400 font-bold">{effectiveOwnerPct}%</span> (Baris 3 Closing Excel)
+                </div>
+              </div>
+
               <div className="pt-2 flex justify-end">
                 <button
                   type="submit"
                   disabled={isSaving}
                   className="inline-flex justify-center items-center py-2.5 px-6 border border-transparent shadow-lg shadow-indigo-600/25 text-xs sm:text-sm font-bold rounded-xl text-white bg-indigo-600 hover:bg-indigo-500 focus:outline-none disabled:opacity-50 transition-all cursor-pointer"
                 >
-                  <Save className="mr-2 h-4 w-4" /> {isSaving ? 'Menyimpan...' : 'Simpan Profil Apotek'}
+                  <Save className="mr-2 h-4 w-4" /> {isSaving ? 'Menyimpan...' : 'Simpan Profil & Pengaturan'}
                 </button>
               </div>
             </form>

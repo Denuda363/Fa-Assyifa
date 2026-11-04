@@ -41,6 +41,8 @@ export interface CompanyProfile {
   customIncomeCategories?: string[];
   customOutcomeTfCategories?: string[];
   previousMonthBalances?: Record<string, number>; // key: YYYY-MM (e.g. '2026-09') -> manual total saldo bulan kemarin
+  companyProfitPercent?: number; // Persentase profit perusahaan dari laba bersih (default: 15)
+  ownerProfitPercent?: number; // Persentase profit owner dari profit perusahaan (default: 20)
 }
 
 export const DEFAULT_PROFILE: CompanyProfile = {
@@ -50,7 +52,9 @@ export const DEFAULT_PROFILE: CompanyProfile = {
   customOutcomeCategories: ['Air', 'Sampah', 'Keamanan', 'Pajak', 'Mes Perum', 'Pinjaman Karyawan', 'Pinjaman Owner'],
   customIncomeCategories: ['Pelunasan Pinjaman Karyawan', 'Pelunasan Pinjaman Owner'],
   customOutcomeTfCategories: ['TF Pinjaman Karyawan', 'TF Pinjaman Owner'],
-  previousMonthBalances: {}
+  previousMonthBalances: {},
+  companyProfitPercent: 15,
+  ownerProfitPercent: 20
 };
 
 export const INCOME_CATEGORIES = [

@@ -260,9 +260,12 @@ export default function Dashboard({ transactions, profile, loans = [], onUpdateP
       }
     });
 
+    const compPercent = typeof profile?.companyProfitPercent === 'number' ? profile.companyProfitPercent : 15;
+    const ownerPercent = typeof profile?.ownerProfitPercent === 'number' ? profile.ownerProfitPercent : 20;
+
     const incomeNeto = incomeBruto - pengeluaranCashTotal - pengeluaranTfTotal;
-    const profitPerusahaan = incomeNeto > 0 ? incomeNeto * 0.15 : 0;
-    const profitOwner = profitPerusahaan * 0.20;
+    const profitPerusahaan = incomeNeto > 0 ? incomeNeto * (compPercent / 100) : 0;
+    const profitOwner = profitPerusahaan * (ownerPercent / 100);
 
     const summary = {
       incomeBruto,
@@ -281,7 +284,7 @@ export default function Dashboard({ transactions, profile, loans = [], onUpdateP
       summary,
       chartData: dailyData
     };
-  }, [transactions, filterMode, selectedMonth, startDate, endDate, availableMonths]);
+  }, [transactions, filterMode, selectedMonth, startDate, endDate, availableMonths, profile]);
 
   const reportLabel = useMemo(() => {
     if (filterMode === 'month') {
@@ -692,7 +695,7 @@ export default function Dashboard({ transactions, profile, loans = [], onUpdateP
               </div>
               <div>
                 <span className="block text-[10px] sm:text-xs font-bold text-indigo-300 uppercase tracking-wider mb-1">
-                  Profit Perusahaan (15%)
+                  Profit Perusahaan ({profile?.companyProfitPercent ?? 15}%)
                 </span>
                 <span className="text-lg sm:text-2xl font-black text-indigo-200 font-mono">
                   {formatRupiah(summary.profitPerusahaan)}
@@ -701,7 +704,7 @@ export default function Dashboard({ transactions, profile, loans = [], onUpdateP
               </div>
               <div>
                 <span className="block text-[10px] sm:text-xs font-bold text-amber-300 uppercase tracking-wider mb-1">
-                  Profit Owner (20%)
+                  Profit Owner ({profile?.ownerProfitPercent ?? 20}%)
                 </span>
                 <span className="text-lg sm:text-2xl font-black text-amber-400 font-mono">
                   {formatRupiah(summary.profitOwner)}

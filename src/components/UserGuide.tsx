@@ -221,6 +221,10 @@ export default function UserGuide() {
       summary: 'Cara menyesuaikan pos-pos pengeluaran, kategori pemasukan, dan identitas perusahaan.',
       steps: [
         {
+          title: 'Kustomisasi Persentase Profit Perusahaan & Profit Owner',
+          desc: '1. Buka menu "Pengaturan" -> pilih tab "Persentase Profit" (atau buka menu "Profil Perusahaan").\n2. Masukkan persentase Profit Perusahaan (standar 15%) dan persentase Profit Owner (standar 20%).\n3. Anda dapat memilih pilihan preset cepat (seperti 15% & 20%, 20% & 25%, dll) atau mengetik angka persentase kustom bebas.\n4. Cek hasil kalkulator simulasi real-time di bawah formulir untuk melihat pembagian nominal rupiahnya.\n5. Klik tombol "Simpan Pengaturan Profit". Perhitungan kartu Dashboard dan baris NO. 3 "SHARE PROFIT TO OWNER" di formulir Closing Excel serta PDF akan otomatis terupdate.'
+        },
+        {
           title: 'Mengubah Identitas Perusahaan / Apotek',
           desc: '1. Buka menu "Profil Perusahaan".\n2. Anda dapat mengubah Nama Apotek, Alamat Lengkap, dan Nomor WhatsApp.\n3. Perubahan profil ini akan langsung tercetak otomatis pada kop laporan PDF dan Excel.'
         },

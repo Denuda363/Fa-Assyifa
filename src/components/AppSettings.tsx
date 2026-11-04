@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { Transaction, CompanyProfile, DEFAULT_PROFILE, formatRupiah } from '../types';
-import { Download, Upload, AlertTriangle, Plus, X, Tag, Edit2, Check, BookOpen, Wallet, Trash2, RotateCcw } from 'lucide-react';
+import { Download, Upload, AlertTriangle, Plus, X, Tag, Edit2, Check, BookOpen, Wallet, Trash2, RotateCcw, Percent, PieChart, Calculator, CheckCircle2, Sparkles, SlidersHorizontal } from 'lucide-react';
 import { db } from '../firebase';
 import { collection, writeBatch, doc } from 'firebase/firestore';
 import UserGuide from './UserGuide';
@@ -14,7 +14,7 @@ interface AppSettingsProps {
 }
 
 export default function AppSettings({ transactions, profile, onUpdateProfile, onRestore }: AppSettingsProps) {
-  const [activeTab, setActiveTab] = useState<'guide' | 'categories' | 'balances' | 'backup'>('guide');
+  const [activeTab, setActiveTab] = useState<'profit' | 'categories' | 'balances' | 'backup' | 'guide'>('profit');
   const [isRestoring, setIsRestoring] = useState(false);
   const [message, setMessage] = useState('');
   const [newCategory, setNewCategory] = useState('');
@@ -28,6 +28,23 @@ export default function AppSettings({ transactions, profile, onUpdateProfile, on
   const [newTfCategory, setNewTfCategory] = useState('');
   const [editingTfCategory, setEditingTfCategory] = useState<string | null>(null);
   const [editTfCategoryValue, setEditTfCategoryValue] = useState('');
+
+  // Profit Sharing State
+  const [companyProfitPercent, setCompanyProfitPercent] = useState<number>(profile.companyProfitPercent ?? 15);
+  const [ownerProfitPercent, setOwnerProfitPercent] = useState<number>(profile.ownerProfitPercent ?? 20);
+  const [profitMessage, setProfitMessage] = useState<string>('');
+  const [isSavingProfit, setIsSavingProfit] = useState<boolean>(false);
+  const [simulationNeto, setSimulationNeto] = useState<number>(10000000);
+
+  // Sync profit state if profile updates
+  React.useEffect(() => {
+    if (typeof profile.companyProfitPercent === 'number') {
+      setCompanyProfitPercent(profile.companyProfitPercent);
+    }
+    if (typeof profile.ownerProfitPercent === 'number') {
+      setOwnerProfitPercent(profile.ownerProfitPercent);
+    }
+  }, [profile.companyProfitPercent, profile.ownerProfitPercent]);
 
   // Saldo Bulan Kemarin State
   const [balanceMonth, setBalanceMonth] = useState(() => {
@@ -43,6 +60,44 @@ export default function AppSettings({ transactions, profile, onUpdateProfile, on
   const customIncomeCategories = profile.customIncomeCategories || DEFAULT_PROFILE.customIncomeCategories || [];
   const customOutcomeTfCategories = profile.customOutcomeTfCategories || DEFAULT_PROFILE.customOutcomeTfCategories || [];
   const previousMonthBalances = profile.previousMonthBalances || {};
+
+  const handleSaveProfitSettings = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setIsSavingProfit(true);
+    try {
+      const validComp = Math.max(0, Math.min(100, Number(companyProfitPercent) || 0));
+      const validOwner = Math.max(0, Math.min(100, Number(ownerProfitPercent) || 0));
+      await onUpdateProfile({
+        companyProfitPercent: validComp,
+        ownerProfitPercent: validOwner
+      });
+      setProfitMessage('Persentase profit perusahaan & owner berhasil disimpan ke cloud database!');
+      setTimeout(() => setProfitMessage(''), 4500);
+    } catch (err) {
+      console.error('Error saving profit percentages:', err);
+      setProfitMessage('Gagal menyimpan pengaturan profit. Silakan coba lagi.');
+    } finally {
+      setIsSavingProfit(false);
+    }
+  };
+
+  const handleResetProfitDefault = async () => {
+    setCompanyProfitPercent(15);
+    setOwnerProfitPercent(20);
+    setIsSavingProfit(true);
+    try {
+      await onUpdateProfile({
+        companyProfitPercent: 15,
+        ownerProfitPercent: 20
+      });
+      setProfitMessage('Persentase profit berhasil direset ke standar (Perusahaan 15%, Owner 20%).');
+      setTimeout(() => setProfitMessage(''), 4500);
+    } catch (err) {
+      console.error('Error resetting profit percentages:', err);
+    } finally {
+      setIsSavingProfit(false);
+    }
+  };
 
   const handleAddCategory = async () => {
     if (!newCategory.trim()) return;
@@ -235,23 +290,25 @@ export default function AppSettings({ transactions, profile, onUpdateProfile, on
       {/* Top Setting Navigation Tabs */}
       <div className="bg-neutral-900/60 backdrop-blur-2xl border border-neutral-800/80 rounded-2xl sm:rounded-3xl p-2 sm:p-2.5 shadow-xl flex items-center justify-between gap-1 overflow-x-auto scrollbar-none no-print">
         <button
-          onClick={() => setActiveTab('guide')}
-          className={`flex items-center justify-center gap-2 px-3 sm:px-5 py-3 rounded-xl sm:rounded-2xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap flex-1 ${
-            activeTab === 'guide'
-              ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30'
+          onClick={() => setActiveTab('profit')}
+          className={`flex items-center justify-center gap-2 px-3 sm:px-4 py-3 rounded-xl sm:rounded-2xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap flex-1 ${
+            activeTab === 'profit'
+              ? 'bg-amber-500 text-neutral-950 shadow-lg shadow-amber-500/30 font-black'
               : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/50'
           }`}
         >
-          <BookOpen className="w-4 h-4 text-indigo-300" />
-          <span>Panduan</span>
-          <span className="hidden sm:inline-block px-1.5 py-0.5 rounded-full text-[10px] font-extrabold bg-indigo-500/25 text-indigo-200 border border-indigo-500/30">
-            9 Bab
+          <Percent className={`w-4 h-4 ${activeTab === 'profit' ? 'text-neutral-950' : 'text-amber-400'}`} />
+          <span>Persentase Profit</span>
+          <span className={`hidden md:inline-block px-1.5 py-0.5 rounded-full text-[10px] font-extrabold ${
+            activeTab === 'profit' ? 'bg-neutral-900 text-amber-300' : 'bg-neutral-800 text-amber-300 border border-neutral-700'
+          }`}>
+            {companyProfitPercent}% / {ownerProfitPercent}%
           </span>
         </button>
 
         <button
           onClick={() => setActiveTab('balances')}
-          className={`flex items-center justify-center gap-2 px-3 sm:px-5 py-3 rounded-xl sm:rounded-2xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap flex-1 ${
+          className={`flex items-center justify-center gap-2 px-3 sm:px-4 py-3 rounded-xl sm:rounded-2xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap flex-1 ${
             activeTab === 'balances'
               ? 'bg-sky-600 text-white shadow-lg shadow-sky-600/30'
               : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/50'
@@ -260,7 +317,7 @@ export default function AppSettings({ transactions, profile, onUpdateProfile, on
           <Wallet className="w-4 h-4 text-sky-400" />
           <span>Saldo Kemarin</span>
           {totalManualBalances > 0 && (
-            <span className="hidden sm:inline-block px-1.5 py-0.5 rounded-full text-[10px] font-extrabold bg-neutral-800 text-sky-300 border border-neutral-700">
+            <span className="hidden md:inline-block px-1.5 py-0.5 rounded-full text-[10px] font-extrabold bg-neutral-800 text-sky-300 border border-neutral-700">
               {totalManualBalances}
             </span>
           )}
@@ -268,7 +325,7 @@ export default function AppSettings({ transactions, profile, onUpdateProfile, on
 
         <button
           onClick={() => setActiveTab('categories')}
-          className={`flex items-center justify-center gap-2 px-3 sm:px-5 py-3 rounded-xl sm:rounded-2xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap flex-1 ${
+          className={`flex items-center justify-center gap-2 px-3 sm:px-4 py-3 rounded-xl sm:rounded-2xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap flex-1 ${
             activeTab === 'categories'
               ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30'
               : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/50'
@@ -276,14 +333,14 @@ export default function AppSettings({ transactions, profile, onUpdateProfile, on
         >
           <Tag className="w-4 h-4 text-emerald-400" />
           <span>Kategori Kas</span>
-          <span className="hidden sm:inline-block px-1.5 py-0.5 rounded-full text-[10px] font-extrabold bg-neutral-800 text-neutral-300 border border-neutral-700">
+          <span className="hidden md:inline-block px-1.5 py-0.5 rounded-full text-[10px] font-extrabold bg-neutral-800 text-neutral-300 border border-neutral-700">
             {totalCustomCats}
           </span>
         </button>
 
         <button
           onClick={() => setActiveTab('backup')}
-          className={`flex items-center justify-center gap-2 px-3 sm:px-5 py-3 rounded-xl sm:rounded-2xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap flex-1 ${
+          className={`flex items-center justify-center gap-2 px-3 sm:px-4 py-3 rounded-xl sm:rounded-2xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap flex-1 ${
             activeTab === 'backup'
               ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30'
               : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/50'
@@ -292,7 +349,324 @@ export default function AppSettings({ transactions, profile, onUpdateProfile, on
           <Download className="w-4 h-4 text-amber-400" />
           <span>Backup</span>
         </button>
+
+        <button
+          onClick={() => setActiveTab('guide')}
+          className={`flex items-center justify-center gap-2 px-3 sm:px-4 py-3 rounded-xl sm:rounded-2xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap flex-1 ${
+            activeTab === 'guide'
+              ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30'
+              : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/50'
+          }`}
+        >
+          <BookOpen className="w-4 h-4 text-indigo-300" />
+          <span>Panduan SOP</span>
+        </button>
       </div>
+
+      {/* Tab: Kustomisasi Persentase Bagi Hasil (Profit Sharing) */}
+      {activeTab === 'profit' && (() => {
+        const compPct = Math.max(0, Math.min(100, Number(companyProfitPercent) || 0));
+        const ownerPct = Math.max(0, Math.min(100, Number(ownerProfitPercent) || 0));
+        const simulatedProfitPerusahaan = (simulationNeto * compPct) / 100;
+        const simulatedProfitOwner = (simulatedProfitPerusahaan * ownerPct) / 100;
+        const effectiveOwnerRate = ((compPct * ownerPct) / 100).toFixed(2);
+        const simulatedCompanyReserve = simulatedProfitPerusahaan - simulatedProfitOwner;
+
+        return (
+          <div className="max-w-6xl mx-auto space-y-6">
+            {/* Header Card */}
+            <div className="bg-[#0b0f17]/90 backdrop-blur-2xl border border-amber-500/25 shadow-2xl p-6 sm:p-8 rounded-2xl sm:rounded-3xl relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-48 h-48 bg-amber-500/10 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none"></div>
+
+              <div className="relative z-10 space-y-6">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-neutral-800/70">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-2xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0 shadow-inner">
+                      <Percent className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-lg sm:text-xl font-bold text-white tracking-tight">
+                          Kustomisasi Persentase Profit Perusahaan & Owner
+                        </h3>
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                          Bagi Hasil
+                        </span>
+                      </div>
+                      <p className="text-xs sm:text-sm text-neutral-400 mt-0.5">
+                        Tentukan alokasi persentase laba usaha apotek dan hak bagi hasil owner yang digunakan di Dashboard dan Excel.
+                      </p>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleResetProfitDefault}
+                    disabled={isSavingProfit}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold text-neutral-400 hover:text-white bg-neutral-900 border border-neutral-800 hover:border-neutral-700 transition-all cursor-pointer self-start sm:self-auto"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5 text-neutral-400" />
+                    <span>Reset ke Standar (15% & 20%)</span>
+                  </button>
+                </div>
+
+                {profitMessage && (
+                  <div className="p-3.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs sm:text-sm font-semibold flex items-center gap-2 shadow-inner">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                    <span>{profitMessage}</span>
+                  </div>
+                )}
+
+                {/* Form Input Grid */}
+                <form onSubmit={handleSaveProfitSettings} className="space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5 sm:gap-6">
+                    {/* Input 1: Persentase Profit Perusahaan */}
+                    <div className="p-5 rounded-2xl bg-neutral-950/70 border border-neutral-800/80 shadow-inner space-y-3 relative group focus-within:border-indigo-500 transition-all">
+                      <div className="flex items-center justify-between">
+                        <label htmlFor="company-profit-pct" className="text-xs font-bold text-indigo-300 uppercase tracking-wider flex items-center gap-1.5">
+                          <PieChart className="w-3.5 h-3.5 text-indigo-400" />
+                          <span>Persentase Profit Perusahaan</span>
+                        </label>
+                        <span className="text-[10px] font-mono font-bold text-neutral-400 bg-neutral-900 px-2 py-0.5 rounded border border-neutral-800">
+                          Standar: 15%
+                        </span>
+                      </div>
+
+                      <div className="flex items-center rounded-xl bg-neutral-900 border border-neutral-800 focus-within:border-indigo-500 overflow-hidden shadow-inner">
+                        <input
+                          type="number"
+                          id="company-profit-pct"
+                          min="0"
+                          max="100"
+                          step="0.1"
+                          required
+                          value={companyProfitPercent}
+                          onChange={(e) => setCompanyProfitPercent(parseFloat(e.target.value) || 0)}
+                          className="flex-1 bg-transparent text-white text-xl sm:text-2xl font-mono font-black py-2.5 px-4 outline-none"
+                          placeholder="15"
+                        />
+                        <span className="px-4 py-2.5 text-indigo-400 font-black font-mono text-xl sm:text-2xl bg-indigo-500/10 border-l border-neutral-800">
+                          %
+                        </span>
+                      </div>
+
+                      <p className="text-[11px] text-neutral-400 leading-relaxed">
+                        Besaran persentase yang disisihkan dari <strong>Penghasilan Bersih (Neto)</strong> apotek sebagai cadangan laba operasional dan bagi hasil usaha.
+                      </p>
+                    </div>
+
+                    {/* Input 2: Persentase Profit Owner */}
+                    <div className="p-5 rounded-2xl bg-neutral-950/70 border border-neutral-800/80 shadow-inner space-y-3 relative group focus-within:border-amber-500 transition-all">
+                      <div className="flex items-center justify-between">
+                        <label htmlFor="owner-profit-pct" className="text-xs font-bold text-amber-300 uppercase tracking-wider flex items-center gap-1.5">
+                          <Percent className="w-3.5 h-3.5 text-amber-400" />
+                          <span>Persentase Profit Owner</span>
+                        </label>
+                        <span className="text-[10px] font-mono font-bold text-neutral-400 bg-neutral-900 px-2 py-0.5 rounded border border-neutral-800">
+                          Standar: 20%
+                        </span>
+                      </div>
+
+                      <div className="flex items-center rounded-xl bg-neutral-900 border border-neutral-800 focus-within:border-amber-500 overflow-hidden shadow-inner">
+                        <input
+                          type="number"
+                          id="owner-profit-pct"
+                          min="0"
+                          max="100"
+                          step="0.1"
+                          required
+                          value={ownerProfitPercent}
+                          onChange={(e) => setOwnerProfitPercent(parseFloat(e.target.value) || 0)}
+                          className="flex-1 bg-transparent text-white text-xl sm:text-2xl font-mono font-black py-2.5 px-4 outline-none"
+                          placeholder="20"
+                        />
+                        <span className="px-4 py-2.5 text-amber-400 font-black font-mono text-xl sm:text-2xl bg-amber-500/10 border-l border-neutral-800">
+                          %
+                        </span>
+                      </div>
+
+                      <p className="text-[11px] text-neutral-400 leading-relaxed">
+                        Porsi hak bagi hasil pemilik apotek yang dihitung dari <strong>Profit Perusahaan</strong> (tercantum di baris ke-3 Excel: <code>SHARE PROFIT TO OWNER</code>).
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Preset Pills for fast 1-click setting */}
+                  <div className="p-4 rounded-2xl bg-neutral-950/50 border border-neutral-800/70 space-y-2.5">
+                    <span className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                      <span>Pilihan Cepat (Presets) Bagi Hasil:</span>
+                    </span>
+                    <div className="flex flex-wrap gap-2">
+                      {[
+                        { label: 'Standar Apotek (Perusahaan 15%, Owner 20%)', comp: 15, owner: 20 },
+                        { label: 'Opsi A (Perusahaan 20%, Owner 25%)', comp: 20, owner: 25 },
+                        { label: 'Opsi B (Perusahaan 10%, Owner 50%)', comp: 10, owner: 50 },
+                        { label: 'Opsi C (Perusahaan 20%, Owner 50%)', comp: 20, owner: 50 },
+                        { label: 'Opsi D (Perusahaan 30%, Owner 30%)', comp: 30, owner: 30 },
+                        { label: 'Bagi Hasil Penuh (100% & 100%)', comp: 100, owner: 100 }
+                      ].map((preset, idx) => (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => {
+                            setCompanyProfitPercent(preset.comp);
+                            setOwnerProfitPercent(preset.owner);
+                          }}
+                          className={`text-xs font-semibold px-3 py-1.5 rounded-xl border transition-all cursor-pointer ${
+                            companyProfitPercent === preset.comp && ownerProfitPercent === preset.owner
+                              ? 'bg-amber-500 text-neutral-950 border-amber-400 font-bold shadow-md shadow-amber-500/20'
+                              : 'bg-neutral-900/80 text-neutral-300 border-neutral-800 hover:border-neutral-700 hover:bg-neutral-800'
+                          }`}
+                        >
+                          {preset.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Effective Rate Explanation Box */}
+                  <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent border border-amber-500/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="space-y-1">
+                      <span className="text-[11px] font-bold text-amber-300 uppercase tracking-wider">
+                        Efektif Bagi Hasil Owner dari Laba Bersih (Neto)
+                      </span>
+                      <div className="text-xs text-neutral-300 font-mono">
+                        {compPct}% × {ownerPct}% = <strong className="text-white text-sm sm:text-base font-bold">{effectiveOwnerRate}%</strong> dari total laba bersih
+                      </div>
+                    </div>
+                    <div className="text-[11px] text-neutral-400 sm:text-right max-w-sm">
+                      Setiap Rp 10.000.000 laba bersih yang didapat apotek, alokasi bagi hasil owner adalah <strong>{formatRupiah((10000000 * compPct * ownerPct) / 10000)}</strong>.
+                    </div>
+                  </div>
+
+                  {/* Submit Button */}
+                  <div className="pt-2 flex justify-end">
+                    <button
+                      type="submit"
+                      disabled={isSavingProfit}
+                      className="inline-flex justify-center items-center py-3 px-7 border border-transparent shadow-xl shadow-amber-500/20 text-xs sm:text-sm font-black rounded-xl text-neutral-950 bg-amber-500 hover:bg-amber-400 focus:outline-none disabled:opacity-50 transition-all cursor-pointer tracking-wide"
+                    >
+                      {isSavingProfit ? 'Menyimpan ke Cloud...' : 'Simpan Pengaturan Profit'}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+
+            {/* Simulation / Calculator Card */}
+            <div className="bg-[#0b0f17]/90 backdrop-blur-2xl border border-neutral-800/80 shadow-2xl p-6 sm:p-8 rounded-2xl sm:rounded-3xl space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-neutral-800/70">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-10 h-10 rounded-xl bg-indigo-500/15 border border-indigo-500/30 flex items-center justify-center text-indigo-400 shrink-0">
+                    <Calculator className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="text-base sm:text-lg font-bold text-white tracking-tight">
+                      Simulasi Kalkulator Pembagian Profit Real-Time
+                    </h4>
+                    <p className="text-xs text-neutral-400">
+                      Uji perhitungan profit secara langsung dengan simulasi laba bersih di bawah ini.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-neutral-400">Uji Coba Laba Bersih:</span>
+                  <div className="flex rounded-xl bg-neutral-900 border border-neutral-800 overflow-hidden shadow-inner">
+                    <span className="px-2.5 py-1 text-xs text-neutral-500 font-mono border-r border-neutral-800 flex items-center">
+                      Rp
+                    </span>
+                    <input
+                      type="number"
+                      step="500000"
+                      min="0"
+                      value={simulationNeto}
+                      onChange={(e) => setSimulationNeto(parseFloat(e.target.value) || 0)}
+                      className="w-32 bg-transparent text-white text-xs font-mono font-bold py-1.5 px-2.5 outline-none"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Simulation Result Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="p-4 rounded-xl bg-neutral-950/70 border border-neutral-800/80 space-y-1">
+                  <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider block">
+                    Penghasilan Bersih (Neto)
+                  </span>
+                  <div className="text-lg sm:text-xl font-black text-white font-mono">
+                    {formatRupiah(simulationNeto)}
+                  </div>
+                  <span className="text-[10px] text-neutral-500 font-mono block">100% Pemasukan - Biaya</span>
+                </div>
+
+                <div className="p-4 rounded-xl bg-indigo-950/30 border border-indigo-500/30 space-y-1">
+                  <span className="text-[10px] font-bold text-indigo-300 uppercase tracking-wider block">
+                    Profit Perusahaan ({compPct}%)
+                  </span>
+                  <div className="text-lg sm:text-xl font-black text-indigo-300 font-mono">
+                    {formatRupiah(simulatedProfitPerusahaan)}
+                  </div>
+                  <span className="text-[10px] text-neutral-400 font-mono block">Cadangan & bagi hasil</span>
+                </div>
+
+                <div className="p-4 rounded-xl bg-amber-950/30 border border-amber-500/30 space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold text-amber-300 uppercase tracking-wider block">
+                      Share Profit Owner ({ownerPct}%)
+                    </span>
+                    <span className="text-[9px] font-mono text-amber-400 bg-amber-500/10 px-1 rounded">
+                      Baris 3 Excel
+                    </span>
+                  </div>
+                  <div className="text-lg sm:text-xl font-black text-amber-400 font-mono">
+                    {formatRupiah(simulatedProfitOwner)}
+                  </div>
+                  <span className="text-[10px] text-neutral-400 font-mono block">
+                    {ownerPct}% dari profit ({effectiveOwnerRate}% neto)
+                  </span>
+                </div>
+
+                <div className="p-4 rounded-xl bg-emerald-950/30 border border-emerald-500/30 space-y-1">
+                  <span className="text-[10px] font-bold text-emerald-300 uppercase tracking-wider block">
+                    Sisa Kas Cadangan Usaha
+                  </span>
+                  <div className="text-lg sm:text-xl font-black text-emerald-400 font-mono">
+                    {formatRupiah(simulatedCompanyReserve)}
+                  </div>
+                  <span className="text-[10px] text-neutral-400 font-mono block">Profit - Hak Owner</span>
+                </div>
+              </div>
+
+              {/* Visual Distribution Bar */}
+              <div className="space-y-2 pt-2">
+                <div className="flex justify-between text-xs text-neutral-400 font-mono">
+                  <span>Distribusi Alokasi Laba Bersih:</span>
+                  <span>Owner: {effectiveOwnerRate}% | Cadangan Perusahaan: {(compPct - parseFloat(effectiveOwnerRate)).toFixed(2)}% | Operasional/Sisa: {(100 - compPct).toFixed(2)}%</span>
+                </div>
+                <div className="h-3.5 w-full bg-neutral-900 rounded-full overflow-hidden flex border border-neutral-800">
+                  <div
+                    style={{ width: `${Math.min(100, parseFloat(effectiveOwnerRate))}%` }}
+                    className="bg-amber-400 h-full transition-all"
+                    title={`Owner Profit Share: ${effectiveOwnerRate}%`}
+                  ></div>
+                  <div
+                    style={{ width: `${Math.min(100, compPct - parseFloat(effectiveOwnerRate))}%` }}
+                    className="bg-indigo-500 h-full transition-all"
+                    title={`Cadangan Perusahaan: ${(compPct - parseFloat(effectiveOwnerRate)).toFixed(2)}%`}
+                  ></div>
+                  <div
+                    style={{ width: `${Math.max(0, 100 - compPct)}%` }}
+                    className="bg-neutral-800 h-full transition-all"
+                    title={`Sisa Dana Kas: ${(100 - compPct).toFixed(2)}%`}
+                  ></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Tab: Panduan Penggunaan Lengkap */}
       {activeTab === 'guide' && (
